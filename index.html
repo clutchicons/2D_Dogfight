@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sky Ace: Warzone Skies</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Main Game Container -->
+    <div id="gameContainer">
+        <!-- Game Canvas -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Main Menu Screen -->
+        <div id="mainMenu" class="screen active">
+            <div class="menu-content">
+                <h1 class="game-title">SKY ACE<br><span>WARZONE SKIES</span></h1>
+                <button class="menu-btn" id="startGameBtn">START MISSION</button>
+                <button class="menu-btn" id="hangarBtn">HANGAR</button>
+                <div class="credits-display">Credits: <span id="menuCredits">0</span></div>
+            </div>
+        </div>
+
+        <!-- Hangar Upgrade Screen -->
+        <div id="hangarScreen" class="screen">
+            <div class="hangar-content">
+                <h2>HANGAR - UPGRADE YOUR AIRCRAFT</h2>
+                <div class="credits-display large">Credits: <span id="hangarCredits">0</span></div>
+
+                <div class="upgrades-grid">
+                    <div class="upgrade-card">
+                        <h3>Max Health</h3>
+                        <div class="upgrade-level">Level: <span id="healthLevel">1</span></div>
+                        <div class="upgrade-cost">Cost: <span id="healthCost">100</span></div>
+                        <button class="upgrade-btn" id="upgradeHealth">UPGRADE</button>
+                    </div>
+
+                    <div class="upgrade-card">
+                        <h3>Armor</h3>
+                        <div class="upgrade-level">Level: <span id="armorLevel">1</span></div>
+                        <div class="upgrade-cost">Cost: <span id="armorCost">100</span></div>
+                        <button class="upgrade-btn" id="upgradeArmor">UPGRADE</button>
+                    </div>
+
+                    <div class="upgrade-card">
+                        <h3>Speed</h3>
+                        <div class="upgrade-level">Level: <span id="speedLevel">1</span></div>
+                        <div class="upgrade-cost">Cost: <span id="speedCost">100</span></div>
+                        <button class="upgrade-btn" id="upgradeSpeed">UPGRADE</button>
+                    </div>
+
+                    <div class="upgrade-card">
+                        <h3>Fire Rate</h3>
+                        <div class="upgrade-level">Level: <span id="fireRateLevel">1</span></div>
+                        <div class="upgrade-cost">Cost: <span id="fireRateCost">100</span></div>
+                        <button class="upgrade-btn" id="upgradeFireRate">UPGRADE</button>
+                    </div>
+
+                    <div class="upgrade-card">
+                        <h3>Weapon Damage</h3>
+                        <div class="upgrade-level">Level: <span id="damageLevel">1</span></div>
+                        <div class="upgrade-cost">Cost: <span id="damageCost">100</span></div>
+                        <button class="upgrade-btn" id="upgradeDamage">UPGRADE</button>
+                    </div>
+
+                    <div class="upgrade-card special">
+                        <h3>Homing Missiles</h3>
+                        <div class="upgrade-level">Level: <span id="missilesLevel">0</span></div>
+                        <div class="upgrade-cost">Cost: <span id="missilesCost">500</span></div>
+                        <button class="upgrade-btn" id="upgradeMissiles">UNLOCK</button>
+                    </div>
+                </div>
+
+                <button class="menu-btn back-btn" id="hangarBackBtn">BACK TO MENU</button>
+                <button class="menu-btn" id="hangarStartBtn">START MISSION</button>
+            </div>
+        </div>
+
+        <!-- Wave Complete Screen -->
+        <div id="waveCompleteScreen" class="screen">
+            <div class="menu-content">
+                <h2>WAVE COMPLETE!</h2>
+                <div class="wave-stats">
+                    <p>Wave <span id="completedWave">1</span> Cleared</p>
+                    <p>Credits Earned: <span id="waveCredits">0</span></p>
+                    <p>Total Credits: <span id="totalCredits">0</span></p>
+                </div>
+                <button class="menu-btn" id="upgradeScreenBtn">HANGAR</button>
+                <button class="menu-btn" id="nextWaveBtn">NEXT WAVE</button>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOverScreen" class="screen">
+            <div class="menu-content">
+                <h2 class="game-over-title">MISSION FAILED</h2>
+                <div class="wave-stats">
+                    <p>Waves Survived: <span id="finalWave">0</span></p>
+                    <p>Enemies Destroyed: <span id="finalKills">0</span></p>
+                    <p>Final Score: <span id="finalScore">0</span></p>
+                </div>
+                <button class="menu-btn" id="retryBtn">RETRY</button>
+                <button class="menu-btn" id="mainMenuBtn">MAIN MENU</button>
+            </div>
+        </div>
+
+        <!-- HUD (shown during gameplay) -->
+        <div id="hud">
+            <div class="hud-top">
+                <div class="hud-item">
+                    <div class="hud-label">HEALTH</div>
+                    <div class="bar-container">
+                        <div class="bar health-bar" id="healthBar"></div>
+                    </div>
+                </div>
+                <div class="hud-item">
+                    <div class="hud-label">ARMOR</div>
+                    <div class="bar-container">
+                        <div class="bar armor-bar" id="armorBar"></div>
+                    </div>
+                </div>
+                <div class="hud-stats">
+                    <div class="stat-item">WAVE: <span id="waveNumber">1</span></div>
+                    <div class="stat-item">CREDITS: <span id="hudCredits">0</span></div>
+                    <div class="stat-item">ENEMIES: <span id="enemyCount">0</span></div>
+                </div>
+            </div>
+            <div class="hud-bottom">
+                <div class="hud-item">
+                    <div class="hud-label">SPECIAL WEAPON</div>
+                    <div class="bar-container">
+                        <div class="bar special-bar" id="specialBar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Touch Controls -->
+        <div id="mobileControls">
+            <div id="joystickContainer">
+                <div id="joystickBase"></div>
+                <div id="joystickStick"></div>
+            </div>
+            <div id="aimZone"></div>
+            <button id="fireBtn" class="mobile-btn">FIRE</button>
+            <button id="specialBtn" class="mobile-btn special">SPECIAL</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>

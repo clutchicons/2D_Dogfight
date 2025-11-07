@@ -94,11 +94,12 @@ class Player {
         this.turnRate = 0; // Current turn rate for banking
 
         // Flight mechanics
-        this.thrust = 0; // Current thrust level (0-1)
-        this.maxSpeed = 4 + (upgrades.speed.level * 0.5);
-        this.minSpeed = 1; // Minimum forward speed
-        this.thrustPower = 0.15;
+        this.thrust = 0.5; // Current thrust level (0-1) - start at 50%
+        this.maxSpeed = 5 + (upgrades.speed.level * 0.5);
+        this.baseSpeed = 1.5; // Constant forward speed
+        this.thrustPower = 0.12;
         this.drag = 0.98;
+        this.gravityEffect = 0.08; // How much gravity affects dive/climb
         this.turnSpeed = 0.04; // Base turn speed
         this.maxTurnSpeed = 0.06; // Max turn speed
 
@@ -126,27 +127,33 @@ class Player {
     }
 
     update(deltaTime) {
-        // Always move forward based on angle (plane physics)
-        const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-        const targetSpeed = this.minSpeed + (this.thrust * (this.maxSpeed - this.minSpeed));
+        // Constant forward acceleration (planes always accelerate forward)
+        this.vx += Math.cos(this.angle) * this.baseSpeed * 0.1;
+        this.vy += Math.sin(this.angle) * this.baseSpeed * 0.1;
 
-        // Apply thrust
+        // Apply additional thrust from player input
         this.vx += Math.cos(this.angle) * this.thrustPower * this.thrust;
         this.vy += Math.sin(this.angle) * this.thrustPower * this.thrust;
+
+        // Gravity effect - diving (pointing down) accelerates, climbing (pointing up) decelerates
+        // Normalize angle to -π to π range
+        let normalizedAngle = this.angle % (Math.PI * 2);
+        if (normalizedAngle > Math.PI) normalizedAngle -= Math.PI * 2;
+        if (normalizedAngle < -Math.PI) normalizedAngle += Math.PI * 2;
+
+        // Calculate vertical component: positive = diving down, negative = climbing up
+        const verticalFactor = Math.sin(normalizedAngle); // -1 (up) to +1 (down)
+
+        // Apply gravity boost when diving, resistance when climbing
+        this.vx += Math.cos(this.angle) * this.gravityEffect * verticalFactor;
+        this.vy += Math.sin(this.angle) * this.gravityEffect * verticalFactor;
 
         // Apply drag
         this.vx *= this.drag;
         this.vy *= this.drag;
 
-        // Maintain minimum speed (planes can't hover)
-        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-        if (speed < this.minSpeed) {
-            const speedBoost = this.minSpeed / (speed || 1);
-            this.vx = Math.cos(this.angle) * this.minSpeed;
-            this.vy = Math.sin(this.angle) * this.minSpeed;
-        }
-
         // Limit maximum speed
+        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
         if (speed > this.maxSpeed) {
             this.vx = (this.vx / speed) * this.maxSpeed;
             this.vy = (this.vy / speed) * this.maxSpeed;
@@ -216,9 +223,9 @@ class Player {
 
         this.lastFired = now;
 
-        // Fire from nose of plane with slight spread
+        // Fire from nose of plane with slight spread - UPDATED for flipped plane
         const spread = 0.08;
-        const noseOffset = this.size * 1.2; // Fire from front of plane
+        const noseOffset = -this.size * 1.2; // Negative because nose is now at negative x
 
         // Calculate nose position
         const noseX = this.x + Math.cos(this.angle) * noseOffset;
@@ -298,14 +305,14 @@ class Player {
         // Scale based on roll for 3D banking effect
         const rollScale = Math.cos(this.roll * Math.PI / 4); // -1 to 1 roll creates banking effect
 
-        // Draw wings (scaled by roll for banking effect)
+        // Draw wings (scaled by roll for banking effect) - FLIPPED
         ctx.fillStyle = wingColor;
         ctx.beginPath();
-        ctx.moveTo(-this.size * 0.3, -this.size * 1.2 * rollScale);
-        ctx.lineTo(this.size * 0.2, -this.size * 0.7 * rollScale);
-        ctx.lineTo(this.size * 0.2, this.size * 0.7 * rollScale);
-        ctx.lineTo(-this.size * 0.3, this.size * 1.2 * rollScale);
-        ctx.lineTo(-this.size * 0.5, 0);
+        ctx.moveTo(this.size * 0.3, -this.size * 1.2 * rollScale);
+        ctx.lineTo(-this.size * 0.2, -this.size * 0.7 * rollScale);
+        ctx.lineTo(-this.size * 0.2, this.size * 0.7 * rollScale);
+        ctx.lineTo(this.size * 0.3, this.size * 1.2 * rollScale);
+        ctx.lineTo(this.size * 0.5, 0);
         ctx.closePath();
         ctx.fill();
 
@@ -314,12 +321,12 @@ class Player {
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Draw plane body (fuselage)
+        // Draw plane body (fuselage) - FLIPPED
         ctx.fillStyle = planeColor;
         ctx.beginPath();
-        ctx.moveTo(this.size * 1.2, 0);
-        ctx.lineTo(-this.size * 0.8, -this.size * 0.4);
-        ctx.lineTo(-this.size * 0.8, this.size * 0.4);
+        ctx.moveTo(-this.size * 1.2, 0);
+        ctx.lineTo(this.size * 0.8, -this.size * 0.4);
+        ctx.lineTo(this.size * 0.8, this.size * 0.4);
         ctx.closePath();
         ctx.fill();
 
@@ -328,27 +335,27 @@ class Player {
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Draw cockpit/canopy
+        // Draw cockpit/canopy - FLIPPED
         ctx.fillStyle = 'rgba(100, 150, 200, 0.6)';
         ctx.beginPath();
-        ctx.ellipse(this.size * 0.2, 0, this.size * 0.35, this.size * 0.25, 0, 0, Math.PI * 2);
+        ctx.ellipse(-this.size * 0.2, 0, this.size * 0.35, this.size * 0.25, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = '#2A3B1A';
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Draw propeller spinner
+        // Draw propeller spinner - FLIPPED (now at front/nose)
         ctx.fillStyle = '#444';
         ctx.beginPath();
-        ctx.arc(this.size * 1.2, 0, this.size * 0.2, 0, Math.PI * 2);
+        ctx.arc(-this.size * 1.2, 0, this.size * 0.2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw tail
+        // Draw tail - FLIPPED
         ctx.fillStyle = wingColor;
         ctx.beginPath();
-        ctx.moveTo(-this.size * 0.8, 0);
-        ctx.lineTo(-this.size * 1.1, -this.size * 0.5 * rollScale);
-        ctx.lineTo(-this.size * 1.1, this.size * 0.5 * rollScale);
+        ctx.moveTo(this.size * 0.8, 0);
+        ctx.lineTo(this.size * 1.1, -this.size * 0.5 * rollScale);
+        ctx.lineTo(this.size * 1.1, this.size * 0.5 * rollScale);
         ctx.closePath();
         ctx.fill();
 
@@ -638,70 +645,70 @@ class Enemy {
         // Scale based on roll for banking effect
         const rollScale = Math.cos(this.roll * Math.PI / 4);
 
-        // Different visuals for bomber
+        // Different visuals for bomber - FLIPPED
         if (this.type === 'bomber') {
             // Larger, boxier plane
             ctx.fillStyle = this.color;
 
-            // Wings
+            // Wings - FLIPPED
             ctx.beginPath();
-            ctx.moveTo(-this.size * 0.2, -this.size * 1.3 * rollScale);
-            ctx.lineTo(this.size * 0.3, -this.size * 0.7 * rollScale);
-            ctx.lineTo(this.size * 0.3, this.size * 0.7 * rollScale);
-            ctx.lineTo(-this.size * 0.2, this.size * 1.3 * rollScale);
-            ctx.lineTo(-this.size * 0.4, 0);
+            ctx.moveTo(this.size * 0.2, -this.size * 1.3 * rollScale);
+            ctx.lineTo(-this.size * 0.3, -this.size * 0.7 * rollScale);
+            ctx.lineTo(-this.size * 0.3, this.size * 0.7 * rollScale);
+            ctx.lineTo(this.size * 0.2, this.size * 1.3 * rollScale);
+            ctx.lineTo(this.size * 0.4, 0);
             ctx.closePath();
             ctx.fill();
 
-            // Body (large fuselage)
+            // Body (large fuselage) - FLIPPED
             ctx.fillStyle = this.color;
-            ctx.fillRect(-this.size * 0.7, -this.size * 0.5, this.size * 1.5, this.size);
+            ctx.fillRect(-this.size * 0.8, -this.size * 0.5, this.size * 1.5, this.size);
 
-            // Cockpit
+            // Cockpit - FLIPPED
             ctx.fillStyle = 'rgba(80, 100, 120, 0.6)';
-            ctx.fillRect(this.size * 0.4, -this.size * 0.3, this.size * 0.4, this.size * 0.6);
+            ctx.fillRect(-this.size * 0.8, -this.size * 0.3, this.size * 0.4, this.size * 0.6);
         } else {
-            // Fighter planes with WW2 styling
+            // Fighter planes with WW2 styling - FLIPPED
             const wingColor = this.type === 'ace' ? '#660000' : this.color;
 
-            // Wings with banking
+            // Wings with banking - FLIPPED
             ctx.fillStyle = wingColor;
             ctx.beginPath();
-            ctx.moveTo(-this.size * 0.3, -this.size * 1.1 * rollScale);
-            ctx.lineTo(this.size * 0.2, -this.size * 0.6 * rollScale);
-            ctx.lineTo(this.size * 0.2, this.size * 0.6 * rollScale);
-            ctx.lineTo(-this.size * 0.3, this.size * 1.1 * rollScale);
-            ctx.lineTo(-this.size * 0.4, 0);
+            ctx.moveTo(this.size * 0.3, -this.size * 1.1 * rollScale);
+            ctx.lineTo(-this.size * 0.2, -this.size * 0.6 * rollScale);
+            ctx.lineTo(-this.size * 0.2, this.size * 0.6 * rollScale);
+            ctx.lineTo(this.size * 0.3, this.size * 1.1 * rollScale);
+            ctx.lineTo(this.size * 0.4, 0);
             ctx.closePath();
             ctx.fill();
 
-            // Body
+            // Body - FLIPPED
             ctx.fillStyle = this.color;
             ctx.beginPath();
-            ctx.moveTo(this.size * 1.1, 0);
-            ctx.lineTo(-this.size * 0.7, -this.size * 0.35);
-            ctx.lineTo(-this.size * 0.7, this.size * 0.35);
+            ctx.moveTo(-this.size * 1.1, 0);
+            ctx.lineTo(this.size * 0.7, -this.size * 0.35);
+            ctx.lineTo(this.size * 0.7, this.size * 0.35);
             ctx.closePath();
             ctx.fill();
 
-            // Cockpit
+            // Cockpit - FLIPPED
             ctx.fillStyle = 'rgba(100, 140, 180, 0.5)';
             ctx.beginPath();
-            ctx.ellipse(this.size * 0.2, 0, this.size * 0.3, this.size * 0.2, 0, 0, Math.PI * 2);
+            ctx.ellipse(-this.size * 0.2, 0, this.size * 0.3, this.size * 0.2, 0, 0, Math.PI * 2);
             ctx.fill();
 
-            // Propeller spinner
+            // Propeller spinner - FLIPPED
             ctx.fillStyle = '#333';
             ctx.beginPath();
-            ctx.arc(this.size * 1.1, 0, this.size * 0.15, 0, Math.PI * 2);
+            ctx.arc(-this.size * 1.1, 0, this.size * 0.15, 0, Math.PI * 2);
             ctx.fill();
 
-            // Tail
+            // Tail - FLIPPED
             ctx.fillStyle = wingColor;
             ctx.beginPath();
-            ctx.moveTo(-this.size * 0.7, 0);
-            ctx.lineTo(-this.size, -this.size * 0.4 * rollScale);
-            ctx.lineTo(-this.size, this.size * 0.4 * rollScale);
+            ctx.moveTo(this.size * 0.7, 0);
+            ctx.lineTo(this.size, -this.size * 0.4 * rollScale);
+            ctx.lineTo(this.size, this.size * 0.4 * rollScale);
             ctx.closePath();
             ctx.fill();
         }
@@ -761,8 +768,8 @@ class Bullet {
     }
 
     draw() {
-        // WW2 style tracer rounds
-        const tracerLength = 15;
+        // WW2 style tracer rounds - shortened for mobile visibility
+        const tracerLength = 8;
 
         // Draw the tracer trail (longer, more visible)
         ctx.save();
@@ -1595,18 +1602,10 @@ function handleInput() {
                 player.turn(angleDiff > 0 ? 1 : -1);
             }
 
-            // Joystick magnitude controls thrust
-            player.thrust = Math.min(1, joyMagnitude);
-        } else {
-            // No joystick input, maintain minimum speed
-            player.thrust = 0.2;
+            // Joystick magnitude controls thrust (0.3 to 1.0 range for better mobile control)
+            player.thrust = 0.3 + (Math.min(1, joyMagnitude) * 0.7);
         }
-    } else if (!game.isMobile) {
-        // Desktop: if no thrust keys pressed, decay thrust slowly
-        if (!keys['w'] && !keys['arrowup'] && !keys['s'] && !keys['arrowdown']) {
-            player.thrust *= 0.98;
-            if (player.thrust < 0.2) player.thrust = 0.2; // Maintain minimum
-        }
+        // When joystick is released, thrust stays at current level (plane keeps accelerating)
     }
 }
 
@@ -1686,7 +1685,7 @@ function startGame() {
         player.maxHealth = 100 * upgrades.maxHealth.level;
         player.health = player.maxHealth;
         player.armor = 10 * upgrades.armor.level;
-        player.maxSpeed = 4 + (upgrades.speed.level * 0.5);
+        player.maxSpeed = 5 + (upgrades.speed.level * 0.5);
         player.fireRate = 150 - (upgrades.fireRate.level * 10);
         player.damage = 10 * upgrades.damage.level;
         player.specialCharge = 0;
@@ -1797,7 +1796,7 @@ document.getElementById('upgradeArmor').addEventListener('click', () => {
 
 document.getElementById('upgradeSpeed').addEventListener('click', () => {
     if (upgradestat('speed')) {
-        if (player) player.maxSpeed = 4 + (upgrades.speed.level * 0.5);
+        if (player) player.maxSpeed = 5 + (upgrades.speed.level * 0.5);
     }
 });
 

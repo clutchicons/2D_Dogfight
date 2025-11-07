@@ -34,7 +34,19 @@ const game = {
     paused: false,
     camera: { x: 0, y: 0 },
     screenShake: 0,
-    isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+    // Deadzone settings for camera
+    deadzone: {
+        width: 400,  // Horizontal deadzone
+        height: 300  // Vertical deadzone
+    },
+    // Map boundaries (soft borders)
+    mapBounds: {
+        minX: -2000,
+        maxX: 2000,
+        minY: -2000,
+        maxY: 2000
+    }
 };
 
 // ========================================
@@ -77,6 +89,8 @@ class Player {
         this.vy = 0;
         this.angle = 0;
         this.size = 20;
+        this.roll = 0;  // Banking angle for turning animation (-1 to 1)
+        this.lastAngle = 0;
 
         // Stats
         this.maxHealth = 100 * upgrades.maxHealth.level;
@@ -109,9 +123,38 @@ class Player {
         this.x += this.vx;
         this.y += this.vy;
 
+        // Apply soft map boundaries (bounce back gently)
+        if (this.x < game.mapBounds.minX) {
+            this.x = game.mapBounds.minX;
+            this.vx *= -0.5;
+        }
+        if (this.x > game.mapBounds.maxX) {
+            this.x = game.mapBounds.maxX;
+            this.vx *= -0.5;
+        }
+        if (this.y < game.mapBounds.minY) {
+            this.y = game.mapBounds.minY;
+            this.vy *= -0.5;
+        }
+        if (this.y > game.mapBounds.maxY) {
+            this.y = game.mapBounds.maxY;
+            this.vy *= -0.5;
+        }
+
         // Apply friction
         this.vx *= this.friction;
         this.vy *= this.friction;
+
+        // Calculate roll based on turning (banking animation)
+        let angleDiff = this.angle - this.lastAngle;
+        // Normalize angle difference
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+        // Update roll (smooth banking)
+        const targetRoll = Math.max(-1, Math.min(1, angleDiff * 10));
+        this.roll += (targetRoll - this.roll) * 0.2;
+        this.lastAngle = this.angle;
 
         // Health regeneration
         if (Date.now() - this.lastHit > this.regenDelay) {
@@ -220,31 +263,66 @@ class Player {
         ctx.translate(this.x - game.camera.x, this.y - game.camera.y);
         ctx.rotate(this.angle);
 
-        // Draw plane body
-        ctx.fillStyle = this.invulnerable ? '#ffff00' : '#00d4ff';
+        // WW2 plane colors (olive drab or RAF gray)
+        const planeColor = this.invulnerable ? '#ffff00' : '#6B7F5A';
+        const wingColor = '#5A6B4A';
+
+        // Scale based on roll for 3D banking effect
+        const rollScale = Math.cos(this.roll * Math.PI / 4); // -1 to 1 roll creates banking effect
+
+        // Draw wings (scaled by roll for banking effect)
+        ctx.fillStyle = wingColor;
         ctx.beginPath();
-        ctx.moveTo(this.size, 0);
-        ctx.lineTo(-this.size, -this.size * 0.6);
+        ctx.moveTo(-this.size * 0.3, -this.size * 1.2 * rollScale);
+        ctx.lineTo(this.size * 0.2, -this.size * 0.7 * rollScale);
+        ctx.lineTo(this.size * 0.2, this.size * 0.7 * rollScale);
+        ctx.lineTo(-this.size * 0.3, this.size * 1.2 * rollScale);
         ctx.lineTo(-this.size * 0.5, 0);
-        ctx.lineTo(-this.size, this.size * 0.6);
         ctx.closePath();
         ctx.fill();
 
-        // Draw cockpit
-        ctx.fillStyle = '#ffffff';
+        // Wing outline
+        ctx.strokeStyle = '#3A4B2A';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw plane body (fuselage)
+        ctx.fillStyle = planeColor;
         ctx.beginPath();
-        ctx.arc(this.size * 0.3, 0, this.size * 0.3, 0, Math.PI * 2);
+        ctx.moveTo(this.size * 1.2, 0);
+        ctx.lineTo(-this.size * 0.8, -this.size * 0.4);
+        ctx.lineTo(-this.size * 0.8, this.size * 0.4);
+        ctx.closePath();
         ctx.fill();
 
-        // Draw wings
-        ctx.strokeStyle = '#00d4ff';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(-this.size * 0.5, -this.size * 0.6);
-        ctx.lineTo(-this.size * 0.5, -this.size * 1.2);
-        ctx.moveTo(-this.size * 0.5, this.size * 0.6);
-        ctx.lineTo(-this.size * 0.5, this.size * 1.2);
+        // Body outline
+        ctx.strokeStyle = '#3A4B2A';
+        ctx.lineWidth = 2;
         ctx.stroke();
+
+        // Draw cockpit/canopy
+        ctx.fillStyle = 'rgba(100, 150, 200, 0.6)';
+        ctx.beginPath();
+        ctx.ellipse(this.size * 0.2, 0, this.size * 0.35, this.size * 0.25, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#2A3B1A';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Draw propeller spinner
+        ctx.fillStyle = '#444';
+        ctx.beginPath();
+        ctx.arc(this.size * 1.2, 0, this.size * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw tail
+        ctx.fillStyle = wingColor;
+        ctx.beginPath();
+        ctx.moveTo(-this.size * 0.8, 0);
+        ctx.lineTo(-this.size * 1.1, -this.size * 0.5 * rollScale);
+        ctx.lineTo(-this.size * 1.1, this.size * 0.5 * rollScale);
+        ctx.closePath();
+        ctx.fill();
 
         ctx.restore();
     }
@@ -264,47 +342,90 @@ class Enemy {
         this.lastFired = 0;
         this.aiTimer = 0;
 
-        // Set stats based on type
+        // Set stats based on type (WW2 themed)
         switch(type) {
+            case 'rookie':
+                // Inexperienced pilot - poor aim, slow
+                this.maxHealth = 25;
+                this.speed = 1.5;
+                this.size = 15;
+                this.fireRate = 2000;
+                this.damage = 4;
+                this.color = '#7A8C6F'; // Light gray-green
+                this.credits = 8;
+                this.accuracy = 0.3; // 30% accuracy
+                break;
             case 'scout':
-                this.maxHealth = 30;
-                this.speed = 2;
+                // Fast, light planes for reconnaissance
+                this.maxHealth = 35;
+                this.speed = 2.5;
                 this.size = 15;
                 this.fireRate = 1500;
                 this.damage = 5;
-                this.color = '#88ff88';
-                this.credits = 10;
+                this.color = '#8B9F7A'; // Tan/brown
+                this.credits = 12;
+                this.accuracy = 0.5;
                 break;
             case 'fighter':
+                // Standard fighter - balanced
                 this.maxHealth = 60;
-                this.speed = 2.5;
+                this.speed = 2.2;
                 this.size = 18;
-                this.fireRate = 800;
+                this.fireRate = 900;
                 this.damage = 8;
-                this.color = '#ff8888';
+                this.color = '#5F6F4F'; // Olive drab
                 this.credits = 25;
+                this.accuracy = 0.7;
+                break;
+            case 'veteran':
+                // Experienced pilot - defensive, smart positioning
+                this.maxHealth = 80;
+                this.speed = 2.4;
+                this.size = 18;
+                this.fireRate = 700;
+                this.damage = 10;
+                this.color = '#4F5F3F'; // Dark green
+                this.credits = 40;
+                this.accuracy = 0.8;
                 break;
             case 'bomber':
+                // Heavy, slow, tough
                 this.maxHealth = 150;
-                this.speed = 1;
+                this.speed = 1.2;
                 this.size = 25;
-                this.fireRate = 2000;
+                this.fireRate = 2500;
                 this.damage = 15;
-                this.color = '#8888ff';
+                this.color = '#6A6A6A'; // Gray
                 this.credits = 50;
+                this.accuracy = 0.6;
+                break;
+            case 'elite':
+                // Elite squadron - aggressive, accurate
+                this.maxHealth = 100;
+                this.speed = 2.8;
+                this.size = 19;
+                this.fireRate = 600;
+                this.damage = 12;
+                this.color = '#3F4F2F'; // Dark olive
+                this.credits = 70;
+                this.accuracy = 0.9;
                 break;
             case 'ace':
-                this.maxHealth = 300;
-                this.speed = 3;
+                // Ace pilot - best of the best
+                this.maxHealth = 200;
+                this.speed = 3.2;
                 this.size = 22;
-                this.fireRate = 500;
-                this.damage = 12;
-                this.color = '#ff88ff';
+                this.fireRate = 450;
+                this.damage = 14;
+                this.color = '#8B0000'; // Dark red (Red Baron style)
                 this.credits = 100;
+                this.accuracy = 0.95;
                 break;
         }
 
         this.health = this.maxHealth;
+        this.roll = 0;
+        this.lastAngle = 0;
     }
 
     update() {
@@ -317,11 +438,26 @@ class Enemy {
         this.aiTimer++;
 
         switch(this.type) {
-            case 'scout':
-                // Simple pursuit
+            case 'rookie':
+                // Inexperienced - flies straight at player, poor tactics
                 this.angle = targetAngle;
                 this.vx = Math.cos(this.angle) * this.speed;
                 this.vy = Math.sin(this.angle) * this.speed;
+                break;
+
+            case 'scout':
+                // Fast hit and run - approaches quickly then retreats
+                if (dist < 250) {
+                    // Retreat
+                    const retreatAngle = targetAngle + Math.PI;
+                    this.vx = Math.cos(retreatAngle) * this.speed;
+                    this.vy = Math.sin(retreatAngle) * this.speed;
+                } else {
+                    // Chase
+                    this.vx = Math.cos(targetAngle) * this.speed;
+                    this.vy = Math.sin(targetAngle) * this.speed;
+                }
+                this.angle = targetAngle;
                 break;
 
             case 'fighter':
@@ -339,6 +475,27 @@ class Enemy {
                 this.angle = targetAngle;
                 break;
 
+            case 'veteran':
+                // Defensive positioning - tries to stay at optimal range
+                const optimalRange = 350;
+                if (dist < optimalRange - 50) {
+                    // Back off
+                    const retreatAngle = targetAngle + Math.PI + Math.sin(this.aiTimer * 0.03) * 0.5;
+                    this.vx = Math.cos(retreatAngle) * this.speed;
+                    this.vy = Math.sin(retreatAngle) * this.speed;
+                } else if (dist > optimalRange + 50) {
+                    // Close in
+                    this.vx = Math.cos(targetAngle) * this.speed;
+                    this.vy = Math.sin(targetAngle) * this.speed;
+                } else {
+                    // Circle at optimal range
+                    const circleAngle = targetAngle + Math.PI / 2;
+                    this.vx = Math.cos(circleAngle) * this.speed;
+                    this.vy = Math.sin(circleAngle) * this.speed;
+                }
+                this.angle = targetAngle;
+                break;
+
             case 'bomber':
                 // Slow approach, keep distance
                 if (dist > 400) {
@@ -351,17 +508,40 @@ class Enemy {
                 this.angle = targetAngle;
                 break;
 
+            case 'elite':
+                // Aggressive scissor maneuvers
+                const scissorAngle = targetAngle + Math.sin(this.aiTimer * 0.08) * Math.PI / 2.5;
+                this.vx = Math.cos(scissorAngle) * this.speed;
+                this.vy = Math.sin(scissorAngle) * this.speed;
+                this.angle = targetAngle;
+                break;
+
             case 'ace':
-                // Unpredictable movement
+                // Unpredictable barrel rolls and weaving
                 const weaveAngle = targetAngle + Math.sin(this.aiTimer * 0.1) * Math.PI / 3;
-                this.vx = Math.cos(weaveAngle) * this.speed;
-                this.vy = Math.sin(weaveAngle) * this.speed;
+                if (dist < 200 && Math.random() < 0.02) {
+                    // Sudden barrel roll / evasive maneuver
+                    const evadeAngle = targetAngle + (Math.random() - 0.5) * Math.PI;
+                    this.vx = Math.cos(evadeAngle) * this.speed * 1.2;
+                    this.vy = Math.sin(evadeAngle) * this.speed * 1.2;
+                } else {
+                    this.vx = Math.cos(weaveAngle) * this.speed;
+                    this.vy = Math.sin(weaveAngle) * this.speed;
+                }
                 this.angle = targetAngle;
                 break;
         }
 
         this.x += this.vx;
         this.y += this.vy;
+
+        // Calculate roll for banking animation
+        let angleDiff = this.angle - this.lastAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        const targetRoll = Math.max(-1, Math.min(1, angleDiff * 10));
+        this.roll += (targetRoll - this.roll) * 0.2;
+        this.lastAngle = this.angle;
 
         // Fire at player
         if (dist < 600) {
@@ -379,11 +559,14 @@ class Enemy {
             // Drop bomb
             bombs.push(new Bomb(this.x, this.y));
         } else {
-            // Shoot bullets
-            const bulletCount = this.type === 'ace' ? 3 : 1;
+            // Shoot bullets with accuracy variation
+            const bulletCount = this.type === 'ace' || this.type === 'elite' ? 3 : 1;
             for (let i = 0; i < bulletCount; i++) {
-                const spread = bulletCount > 1 ? (i - 1) * 0.2 : 0;
-                bullets.push(new Bullet(this.x, this.y, this.angle + spread, this.damage, false));
+                // Apply accuracy - less accurate shots have more spread
+                const inaccuracy = (1 - this.accuracy) * 0.4;
+                const spread = (Math.random() - 0.5) * inaccuracy;
+                const baseSpread = bulletCount > 1 ? (i - 1) * 0.15 : 0;
+                bullets.push(new Bullet(this.x, this.y, this.angle + spread + baseSpread, this.damage, false));
             }
         }
     }
@@ -424,18 +607,80 @@ class Enemy {
         ctx.translate(this.x - game.camera.x, this.y - game.camera.y);
         ctx.rotate(this.angle);
 
-        // Draw plane
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.moveTo(this.size, 0);
-        ctx.lineTo(-this.size, -this.size * 0.5);
-        ctx.lineTo(-this.size * 0.6, 0);
-        ctx.lineTo(-this.size, this.size * 0.5);
-        ctx.closePath();
-        ctx.fill();
+        // Scale based on roll for banking effect
+        const rollScale = Math.cos(this.roll * Math.PI / 4);
+
+        // Different visuals for bomber
+        if (this.type === 'bomber') {
+            // Larger, boxier plane
+            ctx.fillStyle = this.color;
+
+            // Wings
+            ctx.beginPath();
+            ctx.moveTo(-this.size * 0.2, -this.size * 1.3 * rollScale);
+            ctx.lineTo(this.size * 0.3, -this.size * 0.7 * rollScale);
+            ctx.lineTo(this.size * 0.3, this.size * 0.7 * rollScale);
+            ctx.lineTo(-this.size * 0.2, this.size * 1.3 * rollScale);
+            ctx.lineTo(-this.size * 0.4, 0);
+            ctx.closePath();
+            ctx.fill();
+
+            // Body (large fuselage)
+            ctx.fillStyle = this.color;
+            ctx.fillRect(-this.size * 0.7, -this.size * 0.5, this.size * 1.5, this.size);
+
+            // Cockpit
+            ctx.fillStyle = 'rgba(80, 100, 120, 0.6)';
+            ctx.fillRect(this.size * 0.4, -this.size * 0.3, this.size * 0.4, this.size * 0.6);
+        } else {
+            // Fighter planes with WW2 styling
+            const wingColor = this.type === 'ace' ? '#660000' : this.color;
+
+            // Wings with banking
+            ctx.fillStyle = wingColor;
+            ctx.beginPath();
+            ctx.moveTo(-this.size * 0.3, -this.size * 1.1 * rollScale);
+            ctx.lineTo(this.size * 0.2, -this.size * 0.6 * rollScale);
+            ctx.lineTo(this.size * 0.2, this.size * 0.6 * rollScale);
+            ctx.lineTo(-this.size * 0.3, this.size * 1.1 * rollScale);
+            ctx.lineTo(-this.size * 0.4, 0);
+            ctx.closePath();
+            ctx.fill();
+
+            // Body
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.moveTo(this.size * 1.1, 0);
+            ctx.lineTo(-this.size * 0.7, -this.size * 0.35);
+            ctx.lineTo(-this.size * 0.7, this.size * 0.35);
+            ctx.closePath();
+            ctx.fill();
+
+            // Cockpit
+            ctx.fillStyle = 'rgba(100, 140, 180, 0.5)';
+            ctx.beginPath();
+            ctx.ellipse(this.size * 0.2, 0, this.size * 0.3, this.size * 0.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Propeller spinner
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(this.size * 1.1, 0, this.size * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Tail
+            ctx.fillStyle = wingColor;
+            ctx.beginPath();
+            ctx.moveTo(-this.size * 0.7, 0);
+            ctx.lineTo(-this.size, -this.size * 0.4 * rollScale);
+            ctx.lineTo(-this.size, this.size * 0.4 * rollScale);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        ctx.restore();
 
         // Draw health bar
-        ctx.restore();
         const healthBarWidth = 30;
         const healthBarHeight = 4;
         const healthPercent = this.health / this.maxHealth;
@@ -488,18 +733,41 @@ class Bullet {
     }
 
     draw() {
-        ctx.fillStyle = this.isPlayer ? '#ffff00' : '#ff4444';
+        // WW2 style tracer rounds
+        const tracerLength = 15;
+
+        // Draw the tracer trail (longer, more visible)
+        ctx.save();
+        ctx.strokeStyle = this.isPlayer ? '#ffaa00' : '#ff6644';
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(this.x - game.camera.x, this.y - game.camera.y);
+        ctx.lineTo(
+            this.x - this.vx * tracerLength - game.camera.x,
+            this.y - this.vy * tracerLength - game.camera.y
+        );
+        ctx.stroke();
+
+        // Inner bright core
+        ctx.strokeStyle = this.isPlayer ? '#ffff88' : '#ffaa88';
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.moveTo(this.x - game.camera.x, this.y - game.camera.y);
+        ctx.lineTo(
+            this.x - this.vx * (tracerLength * 0.7) - game.camera.x,
+            this.y - this.vy * (tracerLength * 0.7) - game.camera.y
+        );
+        ctx.stroke();
+
+        // Bullet tip (bright point)
+        ctx.fillStyle = this.isPlayer ? '#ffffaa' : '#ffddaa';
         ctx.beginPath();
         ctx.arc(this.x - game.camera.x, this.y - game.camera.y, this.size, 0, Math.PI * 2);
         ctx.fill();
 
-        // Trail
-        ctx.strokeStyle = this.isPlayer ? 'rgba(255, 255, 0, 0.5)' : 'rgba(255, 68, 68, 0.5)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(this.x - game.camera.x, this.y - game.camera.y);
-        ctx.lineTo(this.x - this.vx * 2 - game.camera.x, this.y - this.vy * 2 - game.camera.y);
-        ctx.stroke();
+        ctx.restore();
     }
 }
 
@@ -821,18 +1089,42 @@ function spawnEnemy() {
     const x = player.x + Math.cos(angle) * distance;
     const y = player.y + Math.sin(angle) * distance;
 
-    // Determine enemy type based on wave
-    let type = 'scout';
+    // Determine enemy type based on wave (WW2 themed progression)
+    let type = 'rookie';
     const rand = Math.random();
 
-    if (game.wave >= 3 && rand < 0.3) {
-        type = 'fighter';
-    }
-    if (game.wave >= 5 && rand < 0.15) {
-        type = 'bomber';
-    }
-    if (game.wave >= 8 && rand < 0.05) {
-        type = 'ace';
+    if (game.wave === 1) {
+        // Wave 1: Mostly rookies with some scouts
+        type = rand < 0.7 ? 'rookie' : 'scout';
+    } else if (game.wave === 2) {
+        // Wave 2: Scouts and rookies
+        type = rand < 0.5 ? 'scout' : 'rookie';
+    } else if (game.wave <= 4) {
+        // Wave 3-4: Introduce fighters
+        if (rand < 0.4) type = 'scout';
+        else if (rand < 0.8) type = 'fighter';
+        else type = 'rookie';
+    } else if (game.wave <= 6) {
+        // Wave 5-6: Veterans appear
+        if (rand < 0.3) type = 'fighter';
+        else if (rand < 0.6) type = 'veteran';
+        else if (rand < 0.85) type = 'scout';
+        else type = 'bomber';
+    } else if (game.wave <= 9) {
+        // Wave 7-9: Elite squadrons
+        if (rand < 0.25) type = 'veteran';
+        else if (rand < 0.5) type = 'elite';
+        else if (rand < 0.75) type = 'fighter';
+        else type = 'bomber';
+    } else {
+        // Wave 10+: All types including aces
+        if (rand < 0.15) type = 'rookie';
+        else if (rand < 0.3) type = 'scout';
+        else if (rand < 0.45) type = 'fighter';
+        else if (rand < 0.6) type = 'veteran';
+        else if (rand < 0.75) type = 'elite';
+        else if (rand < 0.9) type = 'bomber';
+        else type = 'ace';
     }
 
     enemies.push(new Enemy(x, y, type));
@@ -1064,19 +1356,57 @@ function checkCollisions() {
 }
 
 // ========================================
-// CAMERA SYSTEM
+// CAMERA SYSTEM (Deadzone)
 // ========================================
 function updateCamera() {
-    // Center camera on player with screen shake
+    // Deadzone camera - only moves when player approaches edges
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+
+    // Player position on screen
+    const playerScreenX = player.x - game.camera.x;
+    const playerScreenY = player.y - game.camera.y;
+
+    // Deadzone boundaries
+    const deadzoneLeft = centerX - game.deadzone.width / 2;
+    const deadzoneRight = centerX + game.deadzone.width / 2;
+    const deadzoneTop = centerY - game.deadzone.height / 2;
+    const deadzoneBottom = centerY + game.deadzone.height / 2;
+
+    // Camera smoothly follows when player exits deadzone
+    const cameraSpeed = 0.1;
+
+    if (playerScreenX < deadzoneLeft) {
+        game.camera.x += (playerScreenX - deadzoneLeft) * cameraSpeed;
+    } else if (playerScreenX > deadzoneRight) {
+        game.camera.x += (playerScreenX - deadzoneRight) * cameraSpeed;
+    }
+
+    if (playerScreenY < deadzoneTop) {
+        game.camera.y += (playerScreenY - deadzoneTop) * cameraSpeed;
+    } else if (playerScreenY > deadzoneBottom) {
+        game.camera.y += (playerScreenY - deadzoneBottom) * cameraSpeed;
+    }
+
+    // Apply screen shake
     const shakeX = (Math.random() - 0.5) * game.screenShake;
     const shakeY = (Math.random() - 0.5) * game.screenShake;
 
-    game.camera.x = player.x - canvas.width / 2 + shakeX;
-    game.camera.y = player.y - canvas.height / 2 + shakeY;
+    game.camera.x += shakeX;
+    game.camera.y += shakeY;
 
     // Reduce screen shake
     game.screenShake *= 0.9;
     if (game.screenShake < 0.1) game.screenShake = 0;
+
+    // Keep camera within map bounds
+    const maxCameraX = game.mapBounds.maxX - canvas.width / 2;
+    const minCameraX = game.mapBounds.minX + canvas.width / 2;
+    const maxCameraY = game.mapBounds.maxY - canvas.height / 2;
+    const minCameraY = game.mapBounds.minY + canvas.height / 2;
+
+    game.camera.x = Math.max(minCameraX, Math.min(maxCameraX, game.camera.x));
+    game.camera.y = Math.max(minCameraY, Math.min(maxCameraY, game.camera.y));
 }
 
 // ========================================
@@ -1146,11 +1476,11 @@ function gameLoop(currentTime) {
     const deltaTime = currentTime - lastTime;
     lastTime = currentTime;
 
-    // Clear canvas
-    ctx.fillStyle = '#0a0a1e';
+    // Clear canvas with WW2 sky background
+    ctx.fillStyle = '#87CEEB'; // Sky blue
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw background grid
+    // Draw background grid and clouds
     drawBackground();
 
     if (game.state === GameState.PLAYING) {
@@ -1240,12 +1570,13 @@ function handleInput() {
 }
 
 function drawBackground() {
-    // Draw grid
-    const gridSize = 100;
+    // WW2 sky background with clouds
+    const gridSize = 150;
     const offsetX = game.camera.x % gridSize;
     const offsetY = game.camera.y % gridSize;
 
-    ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
+    // Light grid for altitude reference
+    ctx.strokeStyle = 'rgba(200, 220, 240, 0.15)';
     ctx.lineWidth = 1;
 
     // Vertical lines
@@ -1262,6 +1593,22 @@ function drawBackground() {
         ctx.moveTo(0, y);
         ctx.lineTo(canvas.width, y);
         ctx.stroke();
+    }
+
+    // Draw simple cloud shapes
+    const cloudSize = 300;
+    const cloudOffsetX = (game.camera.x * 0.3) % cloudSize;
+    const cloudOffsetY = (game.camera.y * 0.3) % cloudSize;
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    for (let x = -cloudOffsetX - cloudSize; x < canvas.width + cloudSize; x += cloudSize) {
+        for (let y = -cloudOffsetY - cloudSize; y < canvas.height + cloudSize; y += cloudSize) {
+            const cloudX = x + (Math.sin(x * 0.01 + y * 0.01) * 50);
+            const cloudY = y + (Math.cos(x * 0.01 + y * 0.01) * 50);
+            ctx.beginPath();
+            ctx.ellipse(cloudX, cloudY, 80, 50, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 }
 

@@ -87,18 +87,25 @@ class Player {
         this.y = 0;
         this.vx = 0;
         this.vy = 0;
-        this.angle = 0;
+        this.angle = -Math.PI / 2; // Start facing up
         this.size = 20;
         this.roll = 0;  // Banking angle for turning animation (-1 to 1)
-        this.lastAngle = 0;
+        this.lastAngle = this.angle;
+        this.turnRate = 0; // Current turn rate for banking
+
+        // Flight mechanics
+        this.thrust = 0; // Current thrust level (0-1)
+        this.maxSpeed = 4 + (upgrades.speed.level * 0.5);
+        this.minSpeed = 1; // Minimum forward speed
+        this.thrustPower = 0.15;
+        this.drag = 0.98;
+        this.turnSpeed = 0.04; // Base turn speed
+        this.maxTurnSpeed = 0.06; // Max turn speed
 
         // Stats
         this.maxHealth = 100 * upgrades.maxHealth.level;
         this.health = this.maxHealth;
         this.armor = 10 * upgrades.armor.level;
-        this.speed = 3 + (upgrades.speed.level * 0.5);
-        this.acceleration = 0.3;
-        this.friction = 0.95;
         this.fireRate = 150 - (upgrades.fireRate.level * 10);
         this.damage = 10 * upgrades.damage.level;
 
@@ -119,6 +126,32 @@ class Player {
     }
 
     update(deltaTime) {
+        // Always move forward based on angle (plane physics)
+        const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+        const targetSpeed = this.minSpeed + (this.thrust * (this.maxSpeed - this.minSpeed));
+
+        // Apply thrust
+        this.vx += Math.cos(this.angle) * this.thrustPower * this.thrust;
+        this.vy += Math.sin(this.angle) * this.thrustPower * this.thrust;
+
+        // Apply drag
+        this.vx *= this.drag;
+        this.vy *= this.drag;
+
+        // Maintain minimum speed (planes can't hover)
+        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+        if (speed < this.minSpeed) {
+            const speedBoost = this.minSpeed / (speed || 1);
+            this.vx = Math.cos(this.angle) * this.minSpeed;
+            this.vy = Math.sin(this.angle) * this.minSpeed;
+        }
+
+        // Limit maximum speed
+        if (speed > this.maxSpeed) {
+            this.vx = (this.vx / speed) * this.maxSpeed;
+            this.vy = (this.vy / speed) * this.maxSpeed;
+        }
+
         // Apply movement
         this.x += this.vx;
         this.y += this.vy;
@@ -141,20 +174,12 @@ class Player {
             this.vy *= -0.5;
         }
 
-        // Apply friction
-        this.vx *= this.friction;
-        this.vy *= this.friction;
+        // Calculate roll based on turn rate (banking animation)
+        const targetRoll = Math.max(-1, Math.min(1, this.turnRate * 20));
+        this.roll += (targetRoll - this.roll) * 0.15;
 
-        // Calculate roll based on turning (banking animation)
-        let angleDiff = this.angle - this.lastAngle;
-        // Normalize angle difference
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-
-        // Update roll (smooth banking)
-        const targetRoll = Math.max(-1, Math.min(1, angleDiff * 10));
-        this.roll += (targetRoll - this.roll) * 0.2;
-        this.lastAngle = this.angle;
+        // Smooth out turn rate
+        this.turnRate *= 0.85;
 
         // Health regeneration
         if (Date.now() - this.lastHit > this.regenDelay) {
@@ -172,20 +197,17 @@ class Player {
         }
     }
 
-    move(dx, dy) {
-        this.vx += dx * this.acceleration;
-        this.vy += dy * this.acceleration;
-
-        // Limit max speed
-        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-        if (speed > this.speed) {
-            this.vx = (this.vx / speed) * this.speed;
-            this.vy = (this.vy / speed) * this.speed;
-        }
+    turn(direction) {
+        // direction: -1 for left, 1 for right
+        const actualTurnSpeed = this.turnSpeed + (this.thrust * 0.02);
+        this.angle += direction * actualTurnSpeed;
+        this.turnRate = direction * actualTurnSpeed;
     }
 
-    aimAt(worldX, worldY) {
-        this.angle = Math.atan2(worldY - this.y, worldX - this.x);
+    adjustThrust(amount) {
+        // amount: positive to increase, negative to decrease
+        this.thrust += amount;
+        this.thrust = Math.max(0, Math.min(1, this.thrust));
     }
 
     fire() {
@@ -194,21 +216,27 @@ class Player {
 
         this.lastFired = now;
 
-        // Create two bullets (dual guns)
-        const spread = 0.1;
-        const offset = 15;
+        // Fire from nose of plane with slight spread
+        const spread = 0.08;
+        const noseOffset = this.size * 1.2; // Fire from front of plane
+
+        // Calculate nose position
+        const noseX = this.x + Math.cos(this.angle) * noseOffset;
+        const noseY = this.y + Math.sin(this.angle) * noseOffset;
+
+        // Create two bullets (wing-mounted guns) with slight convergence
+        const wingOffset = 12;
+        const convergence = 0.02; // Slight inward angle for bullet convergence
 
         // Left gun
-        const leftAngle = this.angle - Math.PI / 2;
-        const leftX = this.x + Math.cos(leftAngle) * offset;
-        const leftY = this.y + Math.sin(leftAngle) * offset;
-        bullets.push(new Bullet(leftX, leftY, this.angle + (Math.random() - 0.5) * spread, this.damage, true));
+        const leftX = noseX + Math.cos(this.angle - Math.PI / 2) * wingOffset;
+        const leftY = noseY + Math.sin(this.angle - Math.PI / 2) * wingOffset;
+        bullets.push(new Bullet(leftX, leftY, this.angle + convergence + (Math.random() - 0.5) * spread, this.damage, true));
 
         // Right gun
-        const rightAngle = this.angle + Math.PI / 2;
-        const rightX = this.x + Math.cos(rightAngle) * offset;
-        const rightY = this.y + Math.sin(rightAngle) * offset;
-        bullets.push(new Bullet(rightX, rightY, this.angle + (Math.random() - 0.5) * spread, this.damage, true));
+        const rightX = noseX + Math.cos(this.angle + Math.PI / 2) * wingOffset;
+        const rightY = noseY + Math.sin(this.angle + Math.PI / 2) * wingOffset;
+        bullets.push(new Bullet(rightX, rightY, this.angle - convergence + (Math.random() - 0.5) * spread, this.damage, true));
 
         playSound('shoot');
     }
@@ -1188,17 +1216,11 @@ window.addEventListener('keyup', (e) => {
     }
 });
 
-window.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    mouseX = e.clientX - rect.left;
-    mouseY = e.clientY - rect.top;
-});
-
 window.addEventListener('mousedown', (e) => {
     if (game.state === GameState.PLAYING) {
-        if (e.button === 0) { // Left click
+        if (e.button === 0) { // Left click to fire
             player.isFiring = true;
-        } else if (e.button === 2) { // Right click
+        } else if (e.button === 2) { // Right click for special
             e.preventDefault();
             player.fireSpecial();
         }
@@ -1535,37 +1557,56 @@ function gameLoop(currentTime) {
 }
 
 function handleInput() {
-    let moveX = 0;
-    let moveY = 0;
+    // Desktop controls - plane-based flight
+    if (keys['w'] || keys['arrowup']) {
+        // Increase thrust (pitch up / accelerate)
+        player.adjustThrust(0.02);
+    }
+    if (keys['s'] || keys['arrowdown']) {
+        // Decrease thrust (pitch down / decelerate)
+        player.adjustThrust(-0.02);
+    }
+    if (keys['a'] || keys['arrowleft']) {
+        // Turn left
+        player.turn(-1);
+    }
+    if (keys['d'] || keys['arrowright']) {
+        // Turn right
+        player.turn(1);
+    }
 
-    // Desktop controls
-    if (keys['w'] || keys['arrowup']) moveY -= 1;
-    if (keys['s'] || keys['arrowdown']) moveY += 1;
-    if (keys['a'] || keys['arrowleft']) moveX -= 1;
-    if (keys['d'] || keys['arrowright']) moveX += 1;
-
-    // Mobile controls
+    // Mobile controls - joystick controls rotation and thrust
     if (joystickActive) {
-        moveX = joystickCurrentX / 45;
-        moveY = joystickCurrentY / 45;
-    }
+        const joyX = joystickCurrentX / 45;
+        const joyY = joystickCurrentY / 45;
+        const joyMagnitude = Math.sqrt(joyX * joyX + joyY * joyY);
 
-    // Apply movement
-    if (moveX !== 0 || moveY !== 0) {
-        player.move(moveX, moveY);
-    }
+        if (joyMagnitude > 0.1) {
+            // Joystick angle determines rotation
+            const joyAngle = Math.atan2(joyY, joyX);
 
-    // Mouse aim
-    if (!game.isMobile || aimTouchId === null) {
-        const worldX = mouseX + game.camera.x;
-        const worldY = mouseY + game.camera.y;
-        player.aimAt(worldX, worldY);
-    } else {
-        // Touch aim
-        const rect = canvas.getBoundingClientRect();
-        const worldX = (aimX - rect.left) + game.camera.x;
-        const worldY = (aimY - rect.top) + game.camera.y;
-        player.aimAt(worldX, worldY);
+            // Calculate angle difference for turning
+            let angleDiff = joyAngle - player.angle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+            // Turn toward joystick direction
+            if (Math.abs(angleDiff) > 0.1) {
+                player.turn(angleDiff > 0 ? 1 : -1);
+            }
+
+            // Joystick magnitude controls thrust
+            player.thrust = Math.min(1, joyMagnitude);
+        } else {
+            // No joystick input, maintain minimum speed
+            player.thrust = 0.2;
+        }
+    } else if (!game.isMobile) {
+        // Desktop: if no thrust keys pressed, decay thrust slowly
+        if (!keys['w'] && !keys['arrowup'] && !keys['s'] && !keys['arrowdown']) {
+            player.thrust *= 0.98;
+            if (player.thrust < 0.2) player.thrust = 0.2; // Maintain minimum
+        }
     }
 }
 
@@ -1636,13 +1677,21 @@ function startGame() {
         player = new Player();
     } else {
         // Reset player stats
+        player.x = 0;
+        player.y = 0;
+        player.vx = 0;
+        player.vy = 0;
+        player.angle = -Math.PI / 2;
+        player.thrust = 0.5; // Start with 50% thrust
         player.maxHealth = 100 * upgrades.maxHealth.level;
         player.health = player.maxHealth;
         player.armor = 10 * upgrades.armor.level;
-        player.speed = 3 + (upgrades.speed.level * 0.5);
+        player.maxSpeed = 4 + (upgrades.speed.level * 0.5);
         player.fireRate = 150 - (upgrades.fireRate.level * 10);
         player.damage = 10 * upgrades.damage.level;
         player.specialCharge = 0;
+        player.roll = 0;
+        player.turnRate = 0;
     }
 
     // Clear arrays
@@ -1748,7 +1797,7 @@ document.getElementById('upgradeArmor').addEventListener('click', () => {
 
 document.getElementById('upgradeSpeed').addEventListener('click', () => {
     if (upgradestat('speed')) {
-        if (player) player.speed = 3 + (upgrades.speed.level * 0.5);
+        if (player) player.maxSpeed = 4 + (upgrades.speed.level * 0.5);
     }
 });
 
@@ -1775,4 +1824,5 @@ updateHangarUI();
 gameLoop(0);
 
 console.log('Sky Ace: Warzone Skies loaded!');
-console.log('Controls: WASD/Arrows - Move, Mouse - Aim, Click/Space - Fire, Right Click/Shift - Special');
+console.log('Controls: W/Up - Thrust Up | S/Down - Thrust Down | A/Left - Turn Left | D/Right - Turn Right');
+console.log('Weapons: Space/Left Click - Fire Guns | Right Click/Shift - Special Weapon');

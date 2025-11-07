@@ -1,3 +1,7 @@
+/* ===============================================
+   SKY ACE: WARZONE SKIES - WW2 MILITARY THEME
+   =============================================== */
+
 /* Global Styles */
 * {
     margin: 0;
@@ -5,10 +9,12 @@
     box-sizing: border-box;
 }
 
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&display=swap');
+
 body {
-    font-family: 'Arial', sans-serif;
-    background: #000;
-    color: #fff;
+    font-family: 'Special Elite', 'Courier New', monospace;
+    background: #2b2520;
+    color: #d4c5a9;
     overflow: hidden;
     touch-action: none;
     -webkit-touch-callout: none;
@@ -27,21 +33,40 @@ body {
     display: block;
     width: 100%;
     height: 100%;
-    background: #1a1a2e;
+    background: #87CEEB;
 }
 
-/* Screen Management */
+/* Screen Management - Military Briefing Aesthetic */
 .screen {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.95);
+    background: linear-gradient(135deg, #3d3328 0%, #2b2520 50%, #1a1612 100%);
     display: none;
     justify-content: center;
     align-items: center;
     z-index: 100;
+}
+
+.screen::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background:
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.05) 2px,
+            rgba(0, 0, 0, 0.05) 4px
+        );
+    pointer-events: none;
+    opacity: 0.3;
 }
 
 .screen.active {
@@ -50,61 +75,123 @@ body {
 
 .menu-content {
     text-align: center;
-    padding: 20px;
+    padding: 40px;
+    background: rgba(60, 50, 40, 0.9);
+    border: 3px solid #5a4a3a;
+    box-shadow:
+        0 0 0 1px #3a2a1a,
+        inset 0 0 30px rgba(0, 0, 0, 0.5),
+        0 10px 40px rgba(0, 0, 0, 0.7);
+    position: relative;
 }
 
-/* Main Menu */
+.menu-content::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    border: 1px solid #8a7a6a;
+    pointer-events: none;
+}
+
+/* Main Menu - Mission Folder Style */
 .game-title {
-    font-size: 4em;
+    font-size: 3.5em;
     font-weight: bold;
-    color: #00d4ff;
-    text-shadow: 0 0 20px #00d4ff, 0 0 40px #00d4ff;
-    margin-bottom: 50px;
-    letter-spacing: 5px;
+    color: #d4a574;
+    text-shadow:
+        2px 2px 0px #2a1a0a,
+        0 0 10px rgba(212, 165, 116, 0.5);
+    margin-bottom: 30px;
+    letter-spacing: 8px;
+    text-transform: uppercase;
+    border-bottom: 3px solid #5a4a3a;
+    padding-bottom: 20px;
 }
 
 .game-title span {
-    font-size: 0.6em;
-    color: #ff4444;
-    text-shadow: 0 0 20px #ff4444;
+    font-size: 0.5em;
+    color: #8b4513;
+    text-shadow: 1px 1px 2px #000;
+    display: block;
+    margin-top: 15px;
+    letter-spacing: 4px;
 }
 
+/* Military-Style Buttons */
 .menu-btn {
     display: block;
-    margin: 15px auto;
-    padding: 15px 40px;
-    font-size: 1.2em;
+    margin: 20px auto;
+    padding: 18px 50px;
+    font-size: 1.1em;
     font-weight: bold;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: 2px solid #00d4ff;
-    color: #fff;
+    font-family: 'Special Elite', 'Courier New', monospace;
+    background: linear-gradient(180deg, #6a5a4a 0%, #4a3a2a 100%);
+    border: 3px solid #3a2a1a;
+    border-top-color: #8a7a6a;
+    border-left-color: #8a7a6a;
+    color: #f4e4c4;
     cursor: pointer;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    transition: all 0.3s;
-    min-width: 250px;
+    letter-spacing: 3px;
+    transition: all 0.2s;
+    min-width: 280px;
+    box-shadow:
+        0 4px 0 #2a1a0a,
+        0 5px 10px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.menu-btn::before {
+    content: '◆';
+    position: absolute;
+    left: 15px;
+    color: #d4a574;
+}
+
+.menu-btn::after {
+    content: '◆';
+    position: absolute;
+    right: 15px;
+    color: #d4a574;
 }
 
 .menu-btn:hover {
-    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-    box-shadow: 0 0 20px #00d4ff;
-    transform: scale(1.05);
+    background: linear-gradient(180deg, #7a6a5a 0%, #5a4a3a 100%);
+    border-color: #d4a574;
+    color: #fff;
+    box-shadow:
+        0 4px 0 #2a1a0a,
+        0 5px 15px rgba(212, 165, 116, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .menu-btn:active {
-    transform: scale(0.95);
+    transform: translateY(2px);
+    box-shadow:
+        0 2px 0 #2a1a0a,
+        0 3px 5px rgba(0, 0, 0, 0.5);
 }
 
 .back-btn {
-    background: linear-gradient(135deg, #555 0%, #333 100%);
-    border-color: #888;
+    background: linear-gradient(180deg, #5a4a3a 0%, #3a2a1a 100%);
+    border-color: #4a3a2a;
 }
 
+/* Credits Display - Stamped Ink Style */
 .credits-display {
     margin-top: 30px;
     font-size: 1.5em;
-    color: #ffd700;
-    text-shadow: 0 0 10px #ffd700;
+    color: #d4a574;
+    text-shadow: 1px 1px 2px #000;
+    letter-spacing: 2px;
+    padding: 10px 20px;
+    background: rgba(42, 26, 10, 0.5);
+    border: 2px dashed #5a4a3a;
+    display: inline-block;
 }
 
 .credits-display.large {
@@ -112,104 +199,151 @@ body {
     margin-bottom: 30px;
 }
 
-/* Hangar Screen */
+/* Hangar Screen - Technical Briefing */
 .hangar-content {
     width: 90%;
     max-width: 1200px;
     text-align: center;
+    background: rgba(50, 40, 30, 0.95);
+    padding: 30px;
+    border: 4px solid #5a4a3a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
 }
 
 .hangar-content h2 {
     font-size: 2.5em;
-    color: #00d4ff;
-    text-shadow: 0 0 20px #00d4ff;
+    color: #d4a574;
+    text-shadow: 2px 2px 4px #000;
     margin-bottom: 20px;
+    letter-spacing: 5px;
+    border-bottom: 3px double #5a4a3a;
+    padding-bottom: 15px;
 }
 
 .upgrades-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 25px;
     margin: 30px 0;
 }
 
+/* Upgrade Cards - Field Manual Pages */
 .upgrade-card {
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-    border: 2px solid #00d4ff;
-    padding: 20px;
-    border-radius: 10px;
+    background: linear-gradient(135deg, #4a3a2a 0%, #3a2a1a 100%);
+    border: 3px solid #5a4a3a;
+    border-top-color: #6a5a4a;
+    border-left-color: #6a5a4a;
+    padding: 25px;
+    border-radius: 0;
     transition: all 0.3s;
+    box-shadow:
+        inset 0 0 20px rgba(0, 0, 0, 0.5),
+        0 5px 15px rgba(0, 0, 0, 0.5);
+    position: relative;
+}
+
+.upgrade-card::before {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    right: 5px;
+    bottom: 5px;
+    border: 1px solid #6a5a4a;
+    pointer-events: none;
 }
 
 .upgrade-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 5px 20px #00d4ff;
+    box-shadow:
+        inset 0 0 20px rgba(0, 0, 0, 0.5),
+        0 8px 20px rgba(212, 165, 116, 0.4);
+    border-color: #d4a574;
 }
 
 .upgrade-card.special {
-    background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
-    border-color: #ffaa00;
+    background: linear-gradient(135deg, #5a3a2a 0%, #4a2a1a 100%);
+    border-color: #8b4513;
 }
 
 .upgrade-card h3 {
-    font-size: 1.5em;
-    margin-bottom: 10px;
-    color: #fff;
+    font-size: 1.4em;
+    margin-bottom: 15px;
+    color: #f4e4c4;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 2px solid #5a4a3a;
+    padding-bottom: 10px;
 }
 
 .upgrade-level, .upgrade-cost {
-    margin: 10px 0;
+    margin: 12px 0;
     font-size: 1.1em;
+    color: #d4c5a9;
 }
 
 .upgrade-btn {
-    margin-top: 15px;
-    padding: 10px 30px;
+    margin-top: 20px;
+    padding: 12px 30px;
     font-size: 1em;
     font-weight: bold;
-    background: #00d4ff;
-    border: none;
-    color: #000;
+    font-family: 'Special Elite', 'Courier New', monospace;
+    background: linear-gradient(180deg, #6a5a4a 0%, #4a3a2a 100%);
+    border: 3px solid #3a2a1a;
+    border-top-color: #8a7a6a;
+    border-left-color: #8a7a6a;
+    color: #f4e4c4;
     cursor: pointer;
     text-transform: uppercase;
-    transition: all 0.3s;
+    transition: all 0.2s;
     width: 100%;
+    letter-spacing: 2px;
 }
 
 .upgrade-btn:hover {
-    background: #00ffff;
-    box-shadow: 0 0 15px #00d4ff;
+    background: linear-gradient(180deg, #7a6a5a 0%, #5a4a3a 100%);
+    color: #fff;
+    border-color: #d4a574;
 }
 
 .upgrade-btn:disabled {
-    background: #555;
-    color: #888;
+    background: linear-gradient(180deg, #3a2a1a 0%, #2a1a0a 100%);
+    color: #5a4a3a;
     cursor: not-allowed;
+    border-color: #2a1a0a;
 }
 
-/* Wave Complete & Game Over */
+/* Wave Stats - After Action Report */
 .wave-stats {
     margin: 30px 0;
     font-size: 1.3em;
+    background: rgba(42, 32, 22, 0.7);
+    padding: 20px;
+    border: 2px solid #5a4a3a;
 }
 
 .wave-stats p {
     margin: 15px 0;
+    letter-spacing: 1px;
 }
 
 .wave-stats span {
-    color: #ffd700;
+    color: #d4a574;
     font-weight: bold;
 }
 
 .game-over-title {
     font-size: 3em;
-    color: #ff4444;
-    text-shadow: 0 0 20px #ff4444;
+    color: #8b0000;
+    text-shadow: 2px 2px 4px #000;
     margin-bottom: 30px;
+    letter-spacing: 5px;
+    border: 3px solid #8b0000;
+    padding: 20px;
+    background: rgba(139, 0, 0, 0.1);
 }
 
-/* HUD */
+/* HUD - Cockpit Instrumentation */
 #hud {
     position: absolute;
     top: 0;
@@ -219,6 +353,7 @@ body {
     pointer-events: none;
     z-index: 50;
     display: none;
+    font-family: 'Special Elite', 'Courier New', monospace;
 }
 
 #hud.active {
@@ -240,42 +375,68 @@ body {
 }
 
 .hud-item {
-    margin-bottom: 10px;
+    margin-bottom: 15px;
 }
 
 .hud-label {
     font-size: 0.9em;
     font-weight: bold;
     margin-bottom: 5px;
-    color: #00d4ff;
-    text-shadow: 0 0 5px #000;
+    color: #f4e4c4;
+    text-shadow:
+        1px 1px 0px #000,
+        2px 2px 5px rgba(0, 0, 0, 0.8);
+    letter-spacing: 2px;
+    text-transform: uppercase;
 }
 
 .bar-container {
     width: 300px;
-    height: 25px;
-    background: rgba(0, 0, 0, 0.7);
-    border: 2px solid #00d4ff;
-    border-radius: 5px;
+    height: 28px;
+    background: rgba(20, 15, 10, 0.8);
+    border: 3px solid #5a4a3a;
+    border-radius: 0;
     overflow: hidden;
+    box-shadow:
+        inset 0 2px 10px rgba(0, 0, 0, 0.8),
+        0 2px 5px rgba(0, 0, 0, 0.5);
 }
 
 .bar {
     height: 100%;
     transition: width 0.3s;
-    box-shadow: 0 0 10px currentColor;
+    position: relative;
+}
+
+.bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 10px,
+        rgba(0, 0, 0, 0.1) 10px,
+        rgba(0, 0, 0, 0.1) 12px
+    );
 }
 
 .health-bar {
-    background: linear-gradient(90deg, #ff4444 0%, #cc0000 100%);
+    background: linear-gradient(90deg, #8b0000 0%, #ff4444 100%);
+    box-shadow: inset 0 0 10px rgba(255, 68, 68, 0.5);
 }
 
 .armor-bar {
-    background: linear-gradient(90deg, #00d4ff 0%, #0088cc 100%);
+    background: linear-gradient(90deg, #4a4a4a 0%, #8a8a8a 100%);
+    box-shadow: inset 0 0 10px rgba(138, 138, 138, 0.5);
 }
 
 .special-bar {
-    background: linear-gradient(90deg, #ffd700 0%, #ffaa00 100%);
+    background: linear-gradient(90deg, #8b4513 0%, #d4a574 100%);
+    box-shadow: inset 0 0 10px rgba(212, 165, 116, 0.5);
 }
 
 .hud-stats {
@@ -289,15 +450,21 @@ body {
     font-size: 1.2em;
     font-weight: bold;
     margin-bottom: 10px;
-    color: #fff;
-    text-shadow: 2px 2px 4px #000;
+    color: #f4e4c4;
+    text-shadow:
+        1px 1px 0px #000,
+        2px 2px 5px rgba(0, 0, 0, 0.8);
+    background: rgba(20, 15, 10, 0.7);
+    padding: 8px 15px;
+    border: 2px solid #5a4a3a;
+    letter-spacing: 1px;
 }
 
 .stat-item span {
-    color: #ffd700;
+    color: #d4a574;
 }
 
-/* Mobile Controls */
+/* Mobile Controls - Field Equipment Style */
 #mobileControls {
     position: absolute;
     bottom: 0;
@@ -326,21 +493,25 @@ body {
     position: absolute;
     width: 100%;
     height: 100%;
-    background: radial-gradient(circle, rgba(0, 212, 255, 0.3) 0%, rgba(0, 212, 255, 0.1) 100%);
-    border: 3px solid rgba(0, 212, 255, 0.5);
+    background: radial-gradient(circle, rgba(90, 74, 58, 0.6) 0%, rgba(42, 32, 22, 0.8) 100%);
+    border: 4px solid #5a4a3a;
     border-radius: 50%;
+    box-shadow:
+        inset 0 0 20px rgba(0, 0, 0, 0.8),
+        0 5px 15px rgba(0, 0, 0, 0.5);
 }
 
 #joystickStick {
     position: absolute;
     width: 60px;
     height: 60px;
-    background: radial-gradient(circle, rgba(0, 212, 255, 0.8) 0%, rgba(0, 212, 255, 0.4) 100%);
-    border: 3px solid #00d4ff;
+    background: radial-gradient(circle, #d4a574 0%, #8a6a4a 100%);
+    border: 3px solid #3a2a1a;
     border-radius: 50%;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.7);
 }
 
 #aimZone {
@@ -350,39 +521,44 @@ body {
     width: 50%;
     height: 70%;
     pointer-events: all;
-    background: radial-gradient(circle at top right, rgba(255, 68, 68, 0.1) 0%, transparent 50%);
+    background: transparent;
 }
 
 .mobile-btn {
     position: absolute;
     pointer-events: all;
-    padding: 20px 30px;
-    font-size: 1.2em;
+    padding: 20px 35px;
+    font-size: 1.1em;
     font-weight: bold;
-    background: rgba(0, 212, 255, 0.6);
-    border: 3px solid #00d4ff;
-    color: #fff;
+    font-family: 'Special Elite', 'Courier New', monospace;
+    background: rgba(90, 74, 58, 0.8);
+    border: 3px solid #5a4a3a;
+    color: #f4e4c4;
     cursor: pointer;
     text-transform: uppercase;
-    border-radius: 10px;
-    transition: all 0.3s;
+    border-radius: 0;
+    transition: all 0.2s;
+    letter-spacing: 2px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.6);
 }
 
 #fireBtn {
     bottom: 120px;
     right: 40px;
+    background: rgba(139, 0, 0, 0.8);
+    border-color: #8b0000;
 }
 
 #specialBtn {
     bottom: 40px;
     right: 40px;
-    background: rgba(255, 170, 0, 0.6);
-    border-color: #ffd700;
+    background: rgba(139, 69, 19, 0.8);
+    border-color: #8b4513;
 }
 
 .mobile-btn:active {
-    transform: scale(0.9);
-    box-shadow: 0 0 20px currentColor;
+    transform: scale(0.95) translateY(2px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.8);
 }
 
 /* Responsive Design */
@@ -393,8 +569,8 @@ body {
 
     .menu-btn {
         font-size: 1em;
-        padding: 12px 30px;
-        min-width: 200px;
+        padding: 15px 30px;
+        min-width: 220px;
     }
 
     .upgrades-grid {
@@ -403,6 +579,7 @@ body {
 
     .bar-container {
         width: 200px;
+        height: 24px;
     }
 
     .hud-stats {
@@ -449,5 +626,10 @@ body {
     .bar-container {
         width: 150px;
         height: 20px;
+    }
+
+    .stat-item {
+        font-size: 1em;
+        padding: 6px 10px;
     }
 }

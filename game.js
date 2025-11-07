@@ -1244,23 +1244,21 @@ window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // Mobile touch controls
 let joystickActive = false;
+let joystickTouchId = null;
 let joystickStartX = 0;
 let joystickStartY = 0;
 let joystickCurrentX = 0;
 let joystickCurrentY = 0;
 
-let aimTouchId = null;
-let aimX = 0;
-let aimY = 0;
-
 const joystickContainer = document.getElementById('joystickContainer');
 const joystickStick = document.getElementById('joystickStick');
-const aimZone = document.getElementById('aimZone');
 const fireBtn = document.getElementById('fireBtn');
 const specialBtn = document.getElementById('specialBtn');
 
 joystickContainer.addEventListener('touchstart', (e) => {
     e.preventDefault();
+    const touch = e.touches[0];
+    joystickTouchId = touch.identifier;
     joystickActive = true;
     const rect = joystickContainer.getBoundingClientRect();
     joystickStartX = rect.left + rect.width / 2;
@@ -1268,40 +1266,46 @@ joystickContainer.addEventListener('touchstart', (e) => {
 });
 
 window.addEventListener('touchmove', (e) => {
-    for (let touch of e.touches) {
-        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    e.preventDefault();
 
-        // Joystick
-        if (joystickActive) {
-            const maxDistance = 45;
-            const dx = touch.clientX - joystickStartX;
-            const dy = touch.clientY - joystickStartY;
-            const distance = Math.min(Math.hypot(dx, dy), maxDistance);
-            const angle = Math.atan2(dy, dx);
+    if (joystickActive && joystickTouchId !== null) {
+        // Find the touch that belongs to the joystick
+        for (let touch of e.touches) {
+            if (touch.identifier === joystickTouchId) {
+                const maxDistance = 50;
+                const dx = touch.clientX - joystickStartX;
+                const dy = touch.clientY - joystickStartY;
+                const distance = Math.min(Math.hypot(dx, dy), maxDistance);
+                const angle = Math.atan2(dy, dx);
 
-            joystickCurrentX = Math.cos(angle) * distance;
-            joystickCurrentY = Math.sin(angle) * distance;
+                joystickCurrentX = Math.cos(angle) * distance;
+                joystickCurrentY = Math.sin(angle) * distance;
 
-            joystickStick.style.transform = `translate(calc(-50% + ${joystickCurrentX}px), calc(-50% + ${joystickCurrentY}px))`;
-        }
-
-        // Aim zone
-        if (target === aimZone || aimZone.contains(target)) {
-            aimTouchId = touch.identifier;
-            aimX = touch.clientX;
-            aimY = touch.clientY;
+                joystickStick.style.transform = `translate(calc(-50% + ${joystickCurrentX}px), calc(-50% + ${joystickCurrentY}px))`;
+                break;
+            }
         }
     }
-});
+}, { passive: false });
 
 window.addEventListener('touchend', (e) => {
+    e.preventDefault();
+
     for (let touch of e.changedTouches) {
-        if (touch.identifier === aimTouchId) {
-            aimTouchId = null;
+        if (touch.identifier === joystickTouchId) {
+            joystickActive = false;
+            joystickTouchId = null;
+            joystickCurrentX = 0;
+            joystickCurrentY = 0;
+            joystickStick.style.transform = 'translate(-50%, -50%)';
+            break;
         }
     }
+}, { passive: false });
 
+window.addEventListener('touchcancel', (e) => {
     joystickActive = false;
+    joystickTouchId = null;
     joystickCurrentX = 0;
     joystickCurrentY = 0;
     joystickStick.style.transform = 'translate(-50%, -50%)';
@@ -1309,24 +1313,27 @@ window.addEventListener('touchend', (e) => {
 
 fireBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     if (game.state === GameState.PLAYING) {
         player.isFiring = true;
     }
-});
+}, { passive: false });
 
 fireBtn.addEventListener('touchend', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     if (game.state === GameState.PLAYING) {
         player.isFiring = false;
     }
-});
+}, { passive: false });
 
 specialBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     if (game.state === GameState.PLAYING) {
         player.fireSpecial();
     }
-});
+}, { passive: false });
 
 // ========================================
 // COLLISION DETECTION

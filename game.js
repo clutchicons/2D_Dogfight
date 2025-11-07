@@ -34,7 +34,19 @@ const game = {
     paused: false,
     camera: { x: 0, y: 0 },
     screenShake: 0,
-    isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+    // Deadzone settings for camera
+    deadzone: {
+        width: 400,  // Horizontal deadzone
+        height: 300  // Vertical deadzone
+    },
+    // Map boundaries (soft borders)
+    mapBounds: {
+        minX: -2000,
+        maxX: 2000,
+        minY: -2000,
+        maxY: 2000
+    }
 };
 
 // ========================================
@@ -75,16 +87,26 @@ class Player {
         this.y = 0;
         this.vx = 0;
         this.vy = 0;
-        this.angle = 0;
+        this.angle = -Math.PI / 2; // Start facing up
         this.size = 20;
+        this.roll = 0;  // Banking angle for turning animation (-1 to 1)
+        this.lastAngle = this.angle;
+        this.turnRate = 0; // Current turn rate for banking
+
+        // Flight mechanics
+        this.thrust = 0.5; // Current thrust level (0-1) - start at 50%
+        this.maxSpeed = 5 + (upgrades.speed.level * 0.5);
+        this.baseSpeed = 1.5; // Constant forward speed
+        this.thrustPower = 0.12;
+        this.drag = 0.98;
+        this.gravityEffect = 0.08; // How much gravity affects dive/climb
+        this.turnSpeed = 0.04; // Base turn speed
+        this.maxTurnSpeed = 0.06; // Max turn speed
 
         // Stats
         this.maxHealth = 100 * upgrades.maxHealth.level;
         this.health = this.maxHealth;
         this.armor = 10 * upgrades.armor.level;
-        this.speed = 3 + (upgrades.speed.level * 0.5);
-        this.acceleration = 0.3;
-        this.friction = 0.95;
         this.fireRate = 150 - (upgrades.fireRate.level * 10);
         this.damage = 10 * upgrades.damage.level;
 
@@ -105,13 +127,86 @@ class Player {
     }
 
     update(deltaTime) {
+        // Constant forward acceleration (planes always accelerate forward)
+        this.vx += Math.cos(this.angle) * this.baseSpeed * 0.1;
+        this.vy += Math.sin(this.angle) * this.baseSpeed * 0.1;
+
+        // Apply additional thrust from player input
+        this.vx += Math.cos(this.angle) * this.thrustPower * this.thrust;
+        this.vy += Math.sin(this.angle) * this.thrustPower * this.thrust;
+
+        // Gravity effect - diving (pointing down) accelerates, climbing (pointing up) decelerates
+        // Normalize angle to -π to π range
+        let normalizedAngle = this.angle % (Math.PI * 2);
+        if (normalizedAngle > Math.PI) normalizedAngle -= Math.PI * 2;
+        if (normalizedAngle < -Math.PI) normalizedAngle += Math.PI * 2;
+
+        // Calculate vertical component: positive = diving down, negative = climbing up
+        const verticalFactor = Math.sin(normalizedAngle); // -1 (up) to +1 (down)
+
+        // Apply gravity boost when diving, resistance when climbing
+        this.vx += Math.cos(this.angle) * this.gravityEffect * verticalFactor;
+        this.vy += Math.sin(this.angle) * this.gravityEffect * verticalFactor;
+
+        // Apply drag
+        this.vx *= this.drag;
+        this.vy *= this.drag;
+
+        // Limit maximum speed
+        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+        if (speed > this.maxSpeed) {
+            this.vx = (this.vx / speed) * this.maxSpeed;
+            this.vy = (this.vy / speed) * this.maxSpeed;
+        }
+
         // Apply movement
         this.x += this.vx;
         this.y += this.vy;
 
-        // Apply friction
-        this.vx *= this.friction;
-        this.vy *= this.friction;
+        // Add smoke trail particles (from engine)
+        if (Math.random() < 0.3) {
+            // Smoke comes from tail (opposite of nose)
+            const tailOffset = this.size * 0.9;
+            const smokeX = this.x + Math.cos(this.angle + Math.PI) * tailOffset;
+            const smokeY = this.y + Math.sin(this.angle + Math.PI) * tailOffset;
+
+            // Smoke drifts slightly and fades
+            const driftX = (Math.random() - 0.5) * 0.5;
+            const driftY = (Math.random() - 0.5) * 0.5;
+
+            particles.push(new Particle(
+                smokeX, smokeY,
+                driftX, driftY,
+                'rgba(80, 80, 80, 0.4)',
+                Math.random() * 3 + 2,
+                40
+            ));
+        }
+
+        // Apply soft map boundaries (bounce back gently)
+        if (this.x < game.mapBounds.minX) {
+            this.x = game.mapBounds.minX;
+            this.vx *= -0.5;
+        }
+        if (this.x > game.mapBounds.maxX) {
+            this.x = game.mapBounds.maxX;
+            this.vx *= -0.5;
+        }
+        if (this.y < game.mapBounds.minY) {
+            this.y = game.mapBounds.minY;
+            this.vy *= -0.5;
+        }
+        if (this.y > game.mapBounds.maxY) {
+            this.y = game.mapBounds.maxY;
+            this.vy *= -0.5;
+        }
+
+        // Calculate roll based on turn rate (banking animation)
+        const targetRoll = Math.max(-1, Math.min(1, this.turnRate * 20));
+        this.roll += (targetRoll - this.roll) * 0.15;
+
+        // Smooth out turn rate
+        this.turnRate *= 0.85;
 
         // Health regeneration
         if (Date.now() - this.lastHit > this.regenDelay) {
@@ -129,20 +224,17 @@ class Player {
         }
     }
 
-    move(dx, dy) {
-        this.vx += dx * this.acceleration;
-        this.vy += dy * this.acceleration;
-
-        // Limit max speed
-        const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-        if (speed > this.speed) {
-            this.vx = (this.vx / speed) * this.speed;
-            this.vy = (this.vy / speed) * this.speed;
-        }
+    turn(direction) {
+        // direction: -1 for left, 1 for right
+        const actualTurnSpeed = this.turnSpeed + (this.thrust * 0.02);
+        this.angle += direction * actualTurnSpeed;
+        this.turnRate = direction * actualTurnSpeed;
     }
 
-    aimAt(worldX, worldY) {
-        this.angle = Math.atan2(worldY - this.y, worldX - this.x);
+    adjustThrust(amount) {
+        // amount: positive to increase, negative to decrease
+        this.thrust += amount;
+        this.thrust = Math.max(0, Math.min(1, this.thrust));
     }
 
     fire() {
@@ -151,21 +243,27 @@ class Player {
 
         this.lastFired = now;
 
-        // Create two bullets (dual guns)
-        const spread = 0.1;
-        const offset = 15;
+        // Fire from nose of plane with slight spread - UPDATED for flipped plane
+        const spread = 0.08;
+        const noseOffset = -this.size * 1.2; // Negative because nose is now at negative x
+
+        // Calculate nose position
+        const noseX = this.x + Math.cos(this.angle) * noseOffset;
+        const noseY = this.y + Math.sin(this.angle) * noseOffset;
+
+        // Create two bullets (wing-mounted guns) with slight convergence
+        const wingOffset = 12;
+        const convergence = 0.02; // Slight inward angle for bullet convergence
 
         // Left gun
-        const leftAngle = this.angle - Math.PI / 2;
-        const leftX = this.x + Math.cos(leftAngle) * offset;
-        const leftY = this.y + Math.sin(leftAngle) * offset;
-        bullets.push(new Bullet(leftX, leftY, this.angle + (Math.random() - 0.5) * spread, this.damage, true));
+        const leftX = noseX + Math.cos(this.angle - Math.PI / 2) * wingOffset;
+        const leftY = noseY + Math.sin(this.angle - Math.PI / 2) * wingOffset;
+        bullets.push(new Bullet(leftX, leftY, this.angle + convergence + (Math.random() - 0.5) * spread, this.damage, true));
 
         // Right gun
-        const rightAngle = this.angle + Math.PI / 2;
-        const rightX = this.x + Math.cos(rightAngle) * offset;
-        const rightY = this.y + Math.sin(rightAngle) * offset;
-        bullets.push(new Bullet(rightX, rightY, this.angle + (Math.random() - 0.5) * spread, this.damage, true));
+        const rightX = noseX + Math.cos(this.angle + Math.PI / 2) * wingOffset;
+        const rightY = noseY + Math.sin(this.angle + Math.PI / 2) * wingOffset;
+        bullets.push(new Bullet(rightX, rightY, this.angle - convergence + (Math.random() - 0.5) * spread, this.damage, true));
 
         playSound('shoot');
     }
@@ -220,31 +318,66 @@ class Player {
         ctx.translate(this.x - game.camera.x, this.y - game.camera.y);
         ctx.rotate(this.angle);
 
-        // Draw plane body
-        ctx.fillStyle = this.invulnerable ? '#ffff00' : '#00d4ff';
+        // WW2 plane colors (olive drab or RAF gray)
+        const planeColor = this.invulnerable ? '#ffff00' : '#6B7F5A';
+        const wingColor = '#5A6B4A';
+
+        // Scale based on roll for 3D banking effect
+        const rollScale = Math.cos(this.roll * Math.PI / 4); // -1 to 1 roll creates banking effect
+
+        // Draw wings (scaled by roll for banking effect) - FLIPPED
+        ctx.fillStyle = wingColor;
         ctx.beginPath();
-        ctx.moveTo(this.size, 0);
-        ctx.lineTo(-this.size, -this.size * 0.6);
-        ctx.lineTo(-this.size * 0.5, 0);
-        ctx.lineTo(-this.size, this.size * 0.6);
+        ctx.moveTo(this.size * 0.3, -this.size * 1.2 * rollScale);
+        ctx.lineTo(-this.size * 0.2, -this.size * 0.7 * rollScale);
+        ctx.lineTo(-this.size * 0.2, this.size * 0.7 * rollScale);
+        ctx.lineTo(this.size * 0.3, this.size * 1.2 * rollScale);
+        ctx.lineTo(this.size * 0.5, 0);
         ctx.closePath();
         ctx.fill();
 
-        // Draw cockpit
-        ctx.fillStyle = '#ffffff';
+        // Wing outline
+        ctx.strokeStyle = '#3A4B2A';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw plane body (fuselage) - FLIPPED
+        ctx.fillStyle = planeColor;
         ctx.beginPath();
-        ctx.arc(this.size * 0.3, 0, this.size * 0.3, 0, Math.PI * 2);
+        ctx.moveTo(-this.size * 1.2, 0);
+        ctx.lineTo(this.size * 0.8, -this.size * 0.4);
+        ctx.lineTo(this.size * 0.8, this.size * 0.4);
+        ctx.closePath();
         ctx.fill();
 
-        // Draw wings
-        ctx.strokeStyle = '#00d4ff';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(-this.size * 0.5, -this.size * 0.6);
-        ctx.lineTo(-this.size * 0.5, -this.size * 1.2);
-        ctx.moveTo(-this.size * 0.5, this.size * 0.6);
-        ctx.lineTo(-this.size * 0.5, this.size * 1.2);
+        // Body outline
+        ctx.strokeStyle = '#3A4B2A';
+        ctx.lineWidth = 2;
         ctx.stroke();
+
+        // Draw cockpit/canopy - FLIPPED
+        ctx.fillStyle = 'rgba(100, 150, 200, 0.6)';
+        ctx.beginPath();
+        ctx.ellipse(-this.size * 0.2, 0, this.size * 0.35, this.size * 0.25, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#2A3B1A';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Draw propeller spinner - FLIPPED (now at front/nose)
+        ctx.fillStyle = '#444';
+        ctx.beginPath();
+        ctx.arc(-this.size * 1.2, 0, this.size * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw tail - FLIPPED
+        ctx.fillStyle = wingColor;
+        ctx.beginPath();
+        ctx.moveTo(this.size * 0.8, 0);
+        ctx.lineTo(this.size * 1.1, -this.size * 0.5 * rollScale);
+        ctx.lineTo(this.size * 1.1, this.size * 0.5 * rollScale);
+        ctx.closePath();
+        ctx.fill();
 
         ctx.restore();
     }
@@ -264,47 +397,90 @@ class Enemy {
         this.lastFired = 0;
         this.aiTimer = 0;
 
-        // Set stats based on type
+        // Set stats based on type (WW2 themed)
         switch(type) {
+            case 'rookie':
+                // Inexperienced pilot - poor aim, slow
+                this.maxHealth = 25;
+                this.speed = 1.5;
+                this.size = 15;
+                this.fireRate = 2000;
+                this.damage = 4;
+                this.color = '#7A8C6F'; // Light gray-green
+                this.credits = 8;
+                this.accuracy = 0.3; // 30% accuracy
+                break;
             case 'scout':
-                this.maxHealth = 30;
-                this.speed = 2;
+                // Fast, light planes for reconnaissance
+                this.maxHealth = 35;
+                this.speed = 2.5;
                 this.size = 15;
                 this.fireRate = 1500;
                 this.damage = 5;
-                this.color = '#88ff88';
-                this.credits = 10;
+                this.color = '#8B9F7A'; // Tan/brown
+                this.credits = 12;
+                this.accuracy = 0.5;
                 break;
             case 'fighter':
+                // Standard fighter - balanced
                 this.maxHealth = 60;
-                this.speed = 2.5;
+                this.speed = 2.2;
                 this.size = 18;
-                this.fireRate = 800;
+                this.fireRate = 900;
                 this.damage = 8;
-                this.color = '#ff8888';
+                this.color = '#5F6F4F'; // Olive drab
                 this.credits = 25;
+                this.accuracy = 0.7;
+                break;
+            case 'veteran':
+                // Experienced pilot - defensive, smart positioning
+                this.maxHealth = 80;
+                this.speed = 2.4;
+                this.size = 18;
+                this.fireRate = 700;
+                this.damage = 10;
+                this.color = '#4F5F3F'; // Dark green
+                this.credits = 40;
+                this.accuracy = 0.8;
                 break;
             case 'bomber':
+                // Heavy, slow, tough
                 this.maxHealth = 150;
-                this.speed = 1;
+                this.speed = 1.2;
                 this.size = 25;
-                this.fireRate = 2000;
+                this.fireRate = 2500;
                 this.damage = 15;
-                this.color = '#8888ff';
+                this.color = '#6A6A6A'; // Gray
                 this.credits = 50;
+                this.accuracy = 0.6;
+                break;
+            case 'elite':
+                // Elite squadron - aggressive, accurate
+                this.maxHealth = 100;
+                this.speed = 2.8;
+                this.size = 19;
+                this.fireRate = 600;
+                this.damage = 12;
+                this.color = '#3F4F2F'; // Dark olive
+                this.credits = 70;
+                this.accuracy = 0.9;
                 break;
             case 'ace':
-                this.maxHealth = 300;
-                this.speed = 3;
+                // Ace pilot - best of the best
+                this.maxHealth = 200;
+                this.speed = 3.2;
                 this.size = 22;
-                this.fireRate = 500;
-                this.damage = 12;
-                this.color = '#ff88ff';
+                this.fireRate = 450;
+                this.damage = 14;
+                this.color = '#8B0000'; // Dark red (Red Baron style)
                 this.credits = 100;
+                this.accuracy = 0.95;
                 break;
         }
 
         this.health = this.maxHealth;
+        this.roll = 0;
+        this.lastAngle = 0;
     }
 
     update() {
@@ -317,11 +493,26 @@ class Enemy {
         this.aiTimer++;
 
         switch(this.type) {
-            case 'scout':
-                // Simple pursuit
+            case 'rookie':
+                // Inexperienced - flies straight at player, poor tactics
                 this.angle = targetAngle;
                 this.vx = Math.cos(this.angle) * this.speed;
                 this.vy = Math.sin(this.angle) * this.speed;
+                break;
+
+            case 'scout':
+                // Fast hit and run - approaches quickly then retreats
+                if (dist < 250) {
+                    // Retreat
+                    const retreatAngle = targetAngle + Math.PI;
+                    this.vx = Math.cos(retreatAngle) * this.speed;
+                    this.vy = Math.sin(retreatAngle) * this.speed;
+                } else {
+                    // Chase
+                    this.vx = Math.cos(targetAngle) * this.speed;
+                    this.vy = Math.sin(targetAngle) * this.speed;
+                }
+                this.angle = targetAngle;
                 break;
 
             case 'fighter':
@@ -339,6 +530,27 @@ class Enemy {
                 this.angle = targetAngle;
                 break;
 
+            case 'veteran':
+                // Defensive positioning - tries to stay at optimal range
+                const optimalRange = 350;
+                if (dist < optimalRange - 50) {
+                    // Back off
+                    const retreatAngle = targetAngle + Math.PI + Math.sin(this.aiTimer * 0.03) * 0.5;
+                    this.vx = Math.cos(retreatAngle) * this.speed;
+                    this.vy = Math.sin(retreatAngle) * this.speed;
+                } else if (dist > optimalRange + 50) {
+                    // Close in
+                    this.vx = Math.cos(targetAngle) * this.speed;
+                    this.vy = Math.sin(targetAngle) * this.speed;
+                } else {
+                    // Circle at optimal range
+                    const circleAngle = targetAngle + Math.PI / 2;
+                    this.vx = Math.cos(circleAngle) * this.speed;
+                    this.vy = Math.sin(circleAngle) * this.speed;
+                }
+                this.angle = targetAngle;
+                break;
+
             case 'bomber':
                 // Slow approach, keep distance
                 if (dist > 400) {
@@ -351,17 +563,40 @@ class Enemy {
                 this.angle = targetAngle;
                 break;
 
+            case 'elite':
+                // Aggressive scissor maneuvers
+                const scissorAngle = targetAngle + Math.sin(this.aiTimer * 0.08) * Math.PI / 2.5;
+                this.vx = Math.cos(scissorAngle) * this.speed;
+                this.vy = Math.sin(scissorAngle) * this.speed;
+                this.angle = targetAngle;
+                break;
+
             case 'ace':
-                // Unpredictable movement
+                // Unpredictable barrel rolls and weaving
                 const weaveAngle = targetAngle + Math.sin(this.aiTimer * 0.1) * Math.PI / 3;
-                this.vx = Math.cos(weaveAngle) * this.speed;
-                this.vy = Math.sin(weaveAngle) * this.speed;
+                if (dist < 200 && Math.random() < 0.02) {
+                    // Sudden barrel roll / evasive maneuver
+                    const evadeAngle = targetAngle + (Math.random() - 0.5) * Math.PI;
+                    this.vx = Math.cos(evadeAngle) * this.speed * 1.2;
+                    this.vy = Math.sin(evadeAngle) * this.speed * 1.2;
+                } else {
+                    this.vx = Math.cos(weaveAngle) * this.speed;
+                    this.vy = Math.sin(weaveAngle) * this.speed;
+                }
                 this.angle = targetAngle;
                 break;
         }
 
         this.x += this.vx;
         this.y += this.vy;
+
+        // Calculate roll for banking animation
+        let angleDiff = this.angle - this.lastAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        const targetRoll = Math.max(-1, Math.min(1, angleDiff * 10));
+        this.roll += (targetRoll - this.roll) * 0.2;
+        this.lastAngle = this.angle;
 
         // Fire at player
         if (dist < 600) {
@@ -379,11 +614,14 @@ class Enemy {
             // Drop bomb
             bombs.push(new Bomb(this.x, this.y));
         } else {
-            // Shoot bullets
-            const bulletCount = this.type === 'ace' ? 3 : 1;
+            // Shoot bullets with accuracy variation
+            const bulletCount = this.type === 'ace' || this.type === 'elite' ? 3 : 1;
             for (let i = 0; i < bulletCount; i++) {
-                const spread = bulletCount > 1 ? (i - 1) * 0.2 : 0;
-                bullets.push(new Bullet(this.x, this.y, this.angle + spread, this.damage, false));
+                // Apply accuracy - less accurate shots have more spread
+                const inaccuracy = (1 - this.accuracy) * 0.4;
+                const spread = (Math.random() - 0.5) * inaccuracy;
+                const baseSpread = bulletCount > 1 ? (i - 1) * 0.15 : 0;
+                bullets.push(new Bullet(this.x, this.y, this.angle + spread + baseSpread, this.damage, false));
             }
         }
     }
@@ -424,18 +662,80 @@ class Enemy {
         ctx.translate(this.x - game.camera.x, this.y - game.camera.y);
         ctx.rotate(this.angle);
 
-        // Draw plane
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.moveTo(this.size, 0);
-        ctx.lineTo(-this.size, -this.size * 0.5);
-        ctx.lineTo(-this.size * 0.6, 0);
-        ctx.lineTo(-this.size, this.size * 0.5);
-        ctx.closePath();
-        ctx.fill();
+        // Scale based on roll for banking effect
+        const rollScale = Math.cos(this.roll * Math.PI / 4);
+
+        // Different visuals for bomber - FLIPPED
+        if (this.type === 'bomber') {
+            // Larger, boxier plane
+            ctx.fillStyle = this.color;
+
+            // Wings - FLIPPED
+            ctx.beginPath();
+            ctx.moveTo(this.size * 0.2, -this.size * 1.3 * rollScale);
+            ctx.lineTo(-this.size * 0.3, -this.size * 0.7 * rollScale);
+            ctx.lineTo(-this.size * 0.3, this.size * 0.7 * rollScale);
+            ctx.lineTo(this.size * 0.2, this.size * 1.3 * rollScale);
+            ctx.lineTo(this.size * 0.4, 0);
+            ctx.closePath();
+            ctx.fill();
+
+            // Body (large fuselage) - FLIPPED
+            ctx.fillStyle = this.color;
+            ctx.fillRect(-this.size * 0.8, -this.size * 0.5, this.size * 1.5, this.size);
+
+            // Cockpit - FLIPPED
+            ctx.fillStyle = 'rgba(80, 100, 120, 0.6)';
+            ctx.fillRect(-this.size * 0.8, -this.size * 0.3, this.size * 0.4, this.size * 0.6);
+        } else {
+            // Fighter planes with WW2 styling - FLIPPED
+            const wingColor = this.type === 'ace' ? '#660000' : this.color;
+
+            // Wings with banking - FLIPPED
+            ctx.fillStyle = wingColor;
+            ctx.beginPath();
+            ctx.moveTo(this.size * 0.3, -this.size * 1.1 * rollScale);
+            ctx.lineTo(-this.size * 0.2, -this.size * 0.6 * rollScale);
+            ctx.lineTo(-this.size * 0.2, this.size * 0.6 * rollScale);
+            ctx.lineTo(this.size * 0.3, this.size * 1.1 * rollScale);
+            ctx.lineTo(this.size * 0.4, 0);
+            ctx.closePath();
+            ctx.fill();
+
+            // Body - FLIPPED
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.moveTo(-this.size * 1.1, 0);
+            ctx.lineTo(this.size * 0.7, -this.size * 0.35);
+            ctx.lineTo(this.size * 0.7, this.size * 0.35);
+            ctx.closePath();
+            ctx.fill();
+
+            // Cockpit - FLIPPED
+            ctx.fillStyle = 'rgba(100, 140, 180, 0.5)';
+            ctx.beginPath();
+            ctx.ellipse(-this.size * 0.2, 0, this.size * 0.3, this.size * 0.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Propeller spinner - FLIPPED
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(-this.size * 1.1, 0, this.size * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Tail - FLIPPED
+            ctx.fillStyle = wingColor;
+            ctx.beginPath();
+            ctx.moveTo(this.size * 0.7, 0);
+            ctx.lineTo(this.size, -this.size * 0.4 * rollScale);
+            ctx.lineTo(this.size, this.size * 0.4 * rollScale);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        ctx.restore();
 
         // Draw health bar
-        ctx.restore();
         const healthBarWidth = 30;
         const healthBarHeight = 4;
         const healthPercent = this.health / this.maxHealth;
@@ -488,18 +788,41 @@ class Bullet {
     }
 
     draw() {
-        ctx.fillStyle = this.isPlayer ? '#ffff00' : '#ff4444';
+        // WW2 style tracer rounds - shortened for mobile visibility
+        const tracerLength = 8;
+
+        // Draw the tracer trail (longer, more visible)
+        ctx.save();
+        ctx.strokeStyle = this.isPlayer ? '#ffaa00' : '#ff6644';
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(this.x - game.camera.x, this.y - game.camera.y);
+        ctx.lineTo(
+            this.x - this.vx * tracerLength - game.camera.x,
+            this.y - this.vy * tracerLength - game.camera.y
+        );
+        ctx.stroke();
+
+        // Inner bright core
+        ctx.strokeStyle = this.isPlayer ? '#ffff88' : '#ffaa88';
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.moveTo(this.x - game.camera.x, this.y - game.camera.y);
+        ctx.lineTo(
+            this.x - this.vx * (tracerLength * 0.7) - game.camera.x,
+            this.y - this.vy * (tracerLength * 0.7) - game.camera.y
+        );
+        ctx.stroke();
+
+        // Bullet tip (bright point)
+        ctx.fillStyle = this.isPlayer ? '#ffffaa' : '#ffddaa';
         ctx.beginPath();
         ctx.arc(this.x - game.camera.x, this.y - game.camera.y, this.size, 0, Math.PI * 2);
         ctx.fill();
 
-        // Trail
-        ctx.strokeStyle = this.isPlayer ? 'rgba(255, 255, 0, 0.5)' : 'rgba(255, 68, 68, 0.5)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(this.x - game.camera.x, this.y - game.camera.y);
-        ctx.lineTo(this.x - this.vx * 2 - game.camera.x, this.y - this.vy * 2 - game.camera.y);
-        ctx.stroke();
+        ctx.restore();
     }
 }
 
@@ -821,18 +1144,42 @@ function spawnEnemy() {
     const x = player.x + Math.cos(angle) * distance;
     const y = player.y + Math.sin(angle) * distance;
 
-    // Determine enemy type based on wave
-    let type = 'scout';
+    // Determine enemy type based on wave (WW2 themed progression)
+    let type = 'rookie';
     const rand = Math.random();
 
-    if (game.wave >= 3 && rand < 0.3) {
-        type = 'fighter';
-    }
-    if (game.wave >= 5 && rand < 0.15) {
-        type = 'bomber';
-    }
-    if (game.wave >= 8 && rand < 0.05) {
-        type = 'ace';
+    if (game.wave === 1) {
+        // Wave 1: Mostly rookies with some scouts
+        type = rand < 0.7 ? 'rookie' : 'scout';
+    } else if (game.wave === 2) {
+        // Wave 2: Scouts and rookies
+        type = rand < 0.5 ? 'scout' : 'rookie';
+    } else if (game.wave <= 4) {
+        // Wave 3-4: Introduce fighters
+        if (rand < 0.4) type = 'scout';
+        else if (rand < 0.8) type = 'fighter';
+        else type = 'rookie';
+    } else if (game.wave <= 6) {
+        // Wave 5-6: Veterans appear
+        if (rand < 0.3) type = 'fighter';
+        else if (rand < 0.6) type = 'veteran';
+        else if (rand < 0.85) type = 'scout';
+        else type = 'bomber';
+    } else if (game.wave <= 9) {
+        // Wave 7-9: Elite squadrons
+        if (rand < 0.25) type = 'veteran';
+        else if (rand < 0.5) type = 'elite';
+        else if (rand < 0.75) type = 'fighter';
+        else type = 'bomber';
+    } else {
+        // Wave 10+: All types including aces
+        if (rand < 0.15) type = 'rookie';
+        else if (rand < 0.3) type = 'scout';
+        else if (rand < 0.45) type = 'fighter';
+        else if (rand < 0.6) type = 'veteran';
+        else if (rand < 0.75) type = 'elite';
+        else if (rand < 0.9) type = 'bomber';
+        else type = 'ace';
     }
 
     enemies.push(new Enemy(x, y, type));
@@ -896,17 +1243,11 @@ window.addEventListener('keyup', (e) => {
     }
 });
 
-window.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    mouseX = e.clientX - rect.left;
-    mouseY = e.clientY - rect.top;
-});
-
 window.addEventListener('mousedown', (e) => {
     if (game.state === GameState.PLAYING) {
-        if (e.button === 0) { // Left click
+        if (e.button === 0) { // Left click to fire
             player.isFiring = true;
-        } else if (e.button === 2) { // Right click
+        } else if (e.button === 2) { // Right click for special
             e.preventDefault();
             player.fireSpecial();
         }
@@ -923,23 +1264,21 @@ window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // Mobile touch controls
 let joystickActive = false;
+let joystickTouchId = null;
 let joystickStartX = 0;
 let joystickStartY = 0;
 let joystickCurrentX = 0;
 let joystickCurrentY = 0;
 
-let aimTouchId = null;
-let aimX = 0;
-let aimY = 0;
-
 const joystickContainer = document.getElementById('joystickContainer');
 const joystickStick = document.getElementById('joystickStick');
-const aimZone = document.getElementById('aimZone');
 const fireBtn = document.getElementById('fireBtn');
 const specialBtn = document.getElementById('specialBtn');
 
 joystickContainer.addEventListener('touchstart', (e) => {
     e.preventDefault();
+    const touch = e.touches[0];
+    joystickTouchId = touch.identifier;
     joystickActive = true;
     const rect = joystickContainer.getBoundingClientRect();
     joystickStartX = rect.left + rect.width / 2;
@@ -947,40 +1286,46 @@ joystickContainer.addEventListener('touchstart', (e) => {
 });
 
 window.addEventListener('touchmove', (e) => {
-    for (let touch of e.touches) {
-        const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    e.preventDefault();
 
-        // Joystick
-        if (joystickActive) {
-            const maxDistance = 45;
-            const dx = touch.clientX - joystickStartX;
-            const dy = touch.clientY - joystickStartY;
-            const distance = Math.min(Math.hypot(dx, dy), maxDistance);
-            const angle = Math.atan2(dy, dx);
+    if (joystickActive && joystickTouchId !== null) {
+        // Find the touch that belongs to the joystick
+        for (let touch of e.touches) {
+            if (touch.identifier === joystickTouchId) {
+                const maxDistance = 50;
+                const dx = touch.clientX - joystickStartX;
+                const dy = touch.clientY - joystickStartY;
+                const distance = Math.min(Math.hypot(dx, dy), maxDistance);
+                const angle = Math.atan2(dy, dx);
 
-            joystickCurrentX = Math.cos(angle) * distance;
-            joystickCurrentY = Math.sin(angle) * distance;
+                joystickCurrentX = Math.cos(angle) * distance;
+                joystickCurrentY = Math.sin(angle) * distance;
 
-            joystickStick.style.transform = `translate(calc(-50% + ${joystickCurrentX}px), calc(-50% + ${joystickCurrentY}px))`;
-        }
-
-        // Aim zone
-        if (target === aimZone || aimZone.contains(target)) {
-            aimTouchId = touch.identifier;
-            aimX = touch.clientX;
-            aimY = touch.clientY;
+                joystickStick.style.transform = `translate(calc(-50% + ${joystickCurrentX}px), calc(-50% + ${joystickCurrentY}px))`;
+                break;
+            }
         }
     }
-});
+}, { passive: false });
 
 window.addEventListener('touchend', (e) => {
+    e.preventDefault();
+
     for (let touch of e.changedTouches) {
-        if (touch.identifier === aimTouchId) {
-            aimTouchId = null;
+        if (touch.identifier === joystickTouchId) {
+            joystickActive = false;
+            joystickTouchId = null;
+            joystickCurrentX = 0;
+            joystickCurrentY = 0;
+            joystickStick.style.transform = 'translate(-50%, -50%)';
+            break;
         }
     }
+}, { passive: false });
 
+window.addEventListener('touchcancel', (e) => {
     joystickActive = false;
+    joystickTouchId = null;
     joystickCurrentX = 0;
     joystickCurrentY = 0;
     joystickStick.style.transform = 'translate(-50%, -50%)';
@@ -988,24 +1333,27 @@ window.addEventListener('touchend', (e) => {
 
 fireBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     if (game.state === GameState.PLAYING) {
         player.isFiring = true;
     }
-});
+}, { passive: false });
 
 fireBtn.addEventListener('touchend', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     if (game.state === GameState.PLAYING) {
         player.isFiring = false;
     }
-});
+}, { passive: false });
 
 specialBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     if (game.state === GameState.PLAYING) {
         player.fireSpecial();
     }
-});
+}, { passive: false });
 
 // ========================================
 // COLLISION DETECTION
@@ -1064,19 +1412,57 @@ function checkCollisions() {
 }
 
 // ========================================
-// CAMERA SYSTEM
+// CAMERA SYSTEM (Deadzone)
 // ========================================
 function updateCamera() {
-    // Center camera on player with screen shake
+    // Deadzone camera - only moves when player approaches edges
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+
+    // Player position on screen
+    const playerScreenX = player.x - game.camera.x;
+    const playerScreenY = player.y - game.camera.y;
+
+    // Deadzone boundaries
+    const deadzoneLeft = centerX - game.deadzone.width / 2;
+    const deadzoneRight = centerX + game.deadzone.width / 2;
+    const deadzoneTop = centerY - game.deadzone.height / 2;
+    const deadzoneBottom = centerY + game.deadzone.height / 2;
+
+    // Camera smoothly follows when player exits deadzone
+    const cameraSpeed = 0.1;
+
+    if (playerScreenX < deadzoneLeft) {
+        game.camera.x += (playerScreenX - deadzoneLeft) * cameraSpeed;
+    } else if (playerScreenX > deadzoneRight) {
+        game.camera.x += (playerScreenX - deadzoneRight) * cameraSpeed;
+    }
+
+    if (playerScreenY < deadzoneTop) {
+        game.camera.y += (playerScreenY - deadzoneTop) * cameraSpeed;
+    } else if (playerScreenY > deadzoneBottom) {
+        game.camera.y += (playerScreenY - deadzoneBottom) * cameraSpeed;
+    }
+
+    // Apply screen shake
     const shakeX = (Math.random() - 0.5) * game.screenShake;
     const shakeY = (Math.random() - 0.5) * game.screenShake;
 
-    game.camera.x = player.x - canvas.width / 2 + shakeX;
-    game.camera.y = player.y - canvas.height / 2 + shakeY;
+    game.camera.x += shakeX;
+    game.camera.y += shakeY;
 
     // Reduce screen shake
     game.screenShake *= 0.9;
     if (game.screenShake < 0.1) game.screenShake = 0;
+
+    // Keep camera within map bounds
+    const maxCameraX = game.mapBounds.maxX - canvas.width / 2;
+    const minCameraX = game.mapBounds.minX + canvas.width / 2;
+    const maxCameraY = game.mapBounds.maxY - canvas.height / 2;
+    const minCameraY = game.mapBounds.minY + canvas.height / 2;
+
+    game.camera.x = Math.max(minCameraX, Math.min(maxCameraX, game.camera.x));
+    game.camera.y = Math.max(minCameraY, Math.min(maxCameraY, game.camera.y));
 }
 
 // ========================================
@@ -1146,11 +1532,11 @@ function gameLoop(currentTime) {
     const deltaTime = currentTime - lastTime;
     lastTime = currentTime;
 
-    // Clear canvas
-    ctx.fillStyle = '#0a0a1e';
+    // Clear canvas with WW2 sky background
+    ctx.fillStyle = '#87CEEB'; // Sky blue
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw background grid
+    // Draw background grid and clouds
     drawBackground();
 
     if (game.state === GameState.PLAYING) {
@@ -1205,47 +1591,59 @@ function gameLoop(currentTime) {
 }
 
 function handleInput() {
-    let moveX = 0;
-    let moveY = 0;
+    // Desktop controls - plane-based flight
+    if (keys['w'] || keys['arrowup']) {
+        // Increase thrust (pitch up / accelerate)
+        player.adjustThrust(0.02);
+    }
+    if (keys['s'] || keys['arrowdown']) {
+        // Decrease thrust (pitch down / decelerate)
+        player.adjustThrust(-0.02);
+    }
+    if (keys['a'] || keys['arrowleft']) {
+        // Turn left
+        player.turn(-1);
+    }
+    if (keys['d'] || keys['arrowright']) {
+        // Turn right
+        player.turn(1);
+    }
 
-    // Desktop controls
-    if (keys['w'] || keys['arrowup']) moveY -= 1;
-    if (keys['s'] || keys['arrowdown']) moveY += 1;
-    if (keys['a'] || keys['arrowleft']) moveX -= 1;
-    if (keys['d'] || keys['arrowright']) moveX += 1;
-
-    // Mobile controls
+    // Mobile controls - joystick controls rotation and thrust
     if (joystickActive) {
-        moveX = joystickCurrentX / 45;
-        moveY = joystickCurrentY / 45;
-    }
+        const joyX = joystickCurrentX / 45;
+        const joyY = joystickCurrentY / 45;
+        const joyMagnitude = Math.sqrt(joyX * joyX + joyY * joyY);
 
-    // Apply movement
-    if (moveX !== 0 || moveY !== 0) {
-        player.move(moveX, moveY);
-    }
+        if (joyMagnitude > 0.1) {
+            // Joystick angle determines rotation
+            const joyAngle = Math.atan2(joyY, joyX);
 
-    // Mouse aim
-    if (!game.isMobile || aimTouchId === null) {
-        const worldX = mouseX + game.camera.x;
-        const worldY = mouseY + game.camera.y;
-        player.aimAt(worldX, worldY);
-    } else {
-        // Touch aim
-        const rect = canvas.getBoundingClientRect();
-        const worldX = (aimX - rect.left) + game.camera.x;
-        const worldY = (aimY - rect.top) + game.camera.y;
-        player.aimAt(worldX, worldY);
+            // Calculate angle difference for turning
+            let angleDiff = joyAngle - player.angle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+            // Turn toward joystick direction
+            if (Math.abs(angleDiff) > 0.1) {
+                player.turn(angleDiff > 0 ? 1 : -1);
+            }
+
+            // Joystick magnitude controls thrust (0.3 to 1.0 range for better mobile control)
+            player.thrust = 0.3 + (Math.min(1, joyMagnitude) * 0.7);
+        }
+        // When joystick is released, thrust stays at current level (plane keeps accelerating)
     }
 }
 
 function drawBackground() {
-    // Draw grid
-    const gridSize = 100;
+    // WW2 sky background with clouds
+    const gridSize = 150;
     const offsetX = game.camera.x % gridSize;
     const offsetY = game.camera.y % gridSize;
 
-    ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
+    // Light grid for altitude reference
+    ctx.strokeStyle = 'rgba(200, 220, 240, 0.15)';
     ctx.lineWidth = 1;
 
     // Vertical lines
@@ -1262,6 +1660,22 @@ function drawBackground() {
         ctx.moveTo(0, y);
         ctx.lineTo(canvas.width, y);
         ctx.stroke();
+    }
+
+    // Draw simple cloud shapes
+    const cloudSize = 300;
+    const cloudOffsetX = (game.camera.x * 0.3) % cloudSize;
+    const cloudOffsetY = (game.camera.y * 0.3) % cloudSize;
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    for (let x = -cloudOffsetX - cloudSize; x < canvas.width + cloudSize; x += cloudSize) {
+        for (let y = -cloudOffsetY - cloudSize; y < canvas.height + cloudSize; y += cloudSize) {
+            const cloudX = x + (Math.sin(x * 0.01 + y * 0.01) * 50);
+            const cloudY = y + (Math.cos(x * 0.01 + y * 0.01) * 50);
+            ctx.beginPath();
+            ctx.ellipse(cloudX, cloudY, 80, 50, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 }
 
@@ -1289,13 +1703,21 @@ function startGame() {
         player = new Player();
     } else {
         // Reset player stats
+        player.x = 0;
+        player.y = 0;
+        player.vx = 0;
+        player.vy = 0;
+        player.angle = -Math.PI / 2;
+        player.thrust = 0.5; // Start with 50% thrust
         player.maxHealth = 100 * upgrades.maxHealth.level;
         player.health = player.maxHealth;
         player.armor = 10 * upgrades.armor.level;
-        player.speed = 3 + (upgrades.speed.level * 0.5);
+        player.maxSpeed = 5 + (upgrades.speed.level * 0.5);
         player.fireRate = 150 - (upgrades.fireRate.level * 10);
         player.damage = 10 * upgrades.damage.level;
         player.specialCharge = 0;
+        player.roll = 0;
+        player.turnRate = 0;
     }
 
     // Clear arrays
@@ -1401,7 +1823,7 @@ document.getElementById('upgradeArmor').addEventListener('click', () => {
 
 document.getElementById('upgradeSpeed').addEventListener('click', () => {
     if (upgradestat('speed')) {
-        if (player) player.speed = 3 + (upgrades.speed.level * 0.5);
+        if (player) player.maxSpeed = 5 + (upgrades.speed.level * 0.5);
     }
 });
 
@@ -1428,4 +1850,5 @@ updateHangarUI();
 gameLoop(0);
 
 console.log('Sky Ace: Warzone Skies loaded!');
-console.log('Controls: WASD/Arrows - Move, Mouse - Aim, Click/Space - Fire, Right Click/Shift - Special');
+console.log('Controls: W/Up - Thrust Up | S/Down - Thrust Down | A/Left - Turn Left | D/Right - Turn Right');
+console.log('Weapons: Space/Left Click - Fire Guns | Right Click/Shift - Special Weapon');

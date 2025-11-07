@@ -163,26 +163,6 @@ class Player {
         this.x += this.vx;
         this.y += this.vy;
 
-        // Add smoke trail particles (from engine)
-        if (Math.random() < 0.3) {
-            // Smoke comes from tail (opposite of nose)
-            const tailOffset = this.size * 0.9;
-            const smokeX = this.x + Math.cos(this.angle + Math.PI) * tailOffset;
-            const smokeY = this.y + Math.sin(this.angle + Math.PI) * tailOffset;
-
-            // Smoke drifts slightly and fades
-            const driftX = (Math.random() - 0.5) * 0.5;
-            const driftY = (Math.random() - 0.5) * 0.5;
-
-            particles.push(new Particle(
-                smokeX, smokeY,
-                driftX, driftY,
-                'rgba(80, 80, 80, 0.4)',
-                Math.random() * 3 + 2,
-                40
-            ));
-        }
-
         // Apply soft map boundaries (bounce back gently)
         if (this.x < game.mapBounds.minX) {
             this.x = game.mapBounds.minX;
